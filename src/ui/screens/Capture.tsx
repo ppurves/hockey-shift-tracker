@@ -15,16 +15,26 @@ import { navigate } from '../hooks/useHashRoute';
 import { useDisplayClock } from '../hooks/useDisplayClock';
 import type { GameSession } from '../hooks/useGameSession';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { useSettings } from '../hooks/useSettings';
+import { tick } from '../audio';
 
 export const periodLabel = (p: number) => (p <= 3 ? `P${p}` : p === 4 ? 'OT' : `OT${p - 3}`);
 
 /** Units grouped into on-screen rows: forwards, defense, special teams (PP + PK). */
 function rows(units: readonly UnitDef[]) {
   const by = (set: string) => units.filter((u) => exclusionSet(u.group) === set);
+  const st = by('ST');
+  // Up to 4 special-teams tiles share a row; more get a PP row and a PK row.
+  const stRows = st.length > 4
+    ? [
+        { key: 'PP', label: 'Power play', units: st.filter((u) => u.group === 'PP') },
+        { key: 'PK', label: 'Penalty kill', units: st.filter((u) => u.group === 'PK') },
+      ]
+    : [{ key: 'ST', label: 'Special teams', units: st }];
   return [
     { key: 'F', label: 'Forwards', units: by('F') },
     { key: 'D', label: 'Defense', units: by('D') },
-    { key: 'ST', label: 'Special teams', units: by('ST') },
+    ...stRows,
   ].filter((r) => r.units.length);
 }
 
@@ -44,7 +54,9 @@ export function Capture({ session }: { session: GameSession }) {
   const name = (id: string) => meta.units.find((u) => u.id === id)?.name ?? id;
   const undoPeek = engine.peekUndo();
 
+  const { settings } = useSettings();
   const run = (cmd: Command) => {
+    if (settings.audioTick) tick();
     const r = dispatch(cmd);
     if (!r.ok) show(r.reason, 'error');
     return r;

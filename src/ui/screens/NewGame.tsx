@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { DEFAULT_PERIOD_MS, isoDate, newGameMeta } from '../../core';
+import { useEffect, useState } from 'react';
+import { DEFAULT_PERIOD_MS, isoDate, newGameMeta, type UnitDef } from '../../core';
 import { putGame } from '../../data/db';
+import { UnitsEditor } from '../components/UnitsEditor';
 import { navigate } from '../hooks/useHashRoute';
+import { useSettings } from '../hooks/useSettings';
 
 export function NewGame() {
   const [opponent, setOpponent] = useState('');
@@ -9,12 +11,20 @@ export function NewGame() {
   const [homeAway, setHomeAway] = useState<'home' | 'away'>('home');
   const [minutes, setMinutes] = useState(String(DEFAULT_PERIOD_MS / 60_000));
   const [busy, setBusy] = useState(false);
+  const { settings, loaded } = useSettings();
+  const [units, setUnits] = useState<UnitDef[] | null>(null);
+  const [showUnits, setShowUnits] = useState(false);
+  useEffect(() => {
+    if (!loaded) return;
+    setUnits((u) => u ?? settings.defaultUnits.map((x) => ({ ...x })));
+    setMinutes(String(settings.defaultPeriodLengthMs / 60_000));
+  }, [loaded, settings]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     const meta = newGameMeta(
-      { opponent, date, homeAway, periodLengthMs: Math.round(Number(minutes) * 60_000) },
+      { opponent, date, homeAway, periodLengthMs: Math.round(Number(minutes) * 60_000), units: units ?? undefined },
       crypto.randomUUID(),
       Date.now(),
     );
@@ -44,8 +54,15 @@ export function NewGame() {
         <label>Period length (minutes)
           <input type="number" inputMode="decimal" min="1" max="60" step="0.5" value={minutes} onChange={(e) => setMinutes(e.target.value)} required />
         </label>
-        <p className="muted small">Unit names (Line 1, D 1, …) can be renamed in a later update.</p>
-        <button className="big-btn primary" disabled={busy}>Create game</button>
+        {units && (
+          <div>
+            <button type="button" className="link-btn" aria-expanded={showUnits} onClick={() => setShowUnits(!showUnits)}>
+              {showUnits ? '▾' : '▸'} Unit names for this game ({units.length} units)
+            </button>
+            {showUnits && <UnitsEditor units={units} onChange={setUnits} />}
+          </div>
+        )}
+        <button className="big-btn primary" disabled={busy || !loaded}>Create game</button>
       </form>
     </main>
   );

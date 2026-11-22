@@ -14,10 +14,10 @@
 .cap-header { grid-area: header; display: grid; grid-template-columns: 44px auto 1fr auto; align-items: center; gap: 8px; }
 .cap-back { min-height: 52px; background: none; border: 0; font-size: 2rem; color: var(--muted); }
 .cap-period { min-height: 56px; min-width: 76px; border-radius: 12px; border: 2px solid #3a76ad; background: var(--navy); font-size: 1.3rem; font-weight: 800; }
-.cap-clock { text-align: center; font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.cap-clock { text-align: center; font-size: min(2.6rem, 11vw); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
 .cap-clock small { display: block; font-size: 0.75rem; font-weight: 700; color: var(--warn); }
 .cap-clock.over { color: var(--warn); }
-.cap-score { text-align: right; font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cap-score { text-align: right; font-size: min(1.6rem, 7vw); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .cap-score small { display: block; font-size: 0.7rem; font-weight: 600; color: var(--muted); max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-strips { grid-area: strips; display: grid; gap: 4px; }
 .cap-strips:empty { display: none; }
@@ -37,22 +37,22 @@
   transition: transform .06s;
 }
 .tile:active { transform: scale(0.96); filter: brightness(1.3); }
-.tile-name { font-size: 1.05rem; font-weight: 800; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
-.tile-time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; opacity: .75; }
-.tile-state { font-size: 0.7rem; font-weight: 800; letter-spacing: .05em; min-height: 1em; opacity: .7; }
+.tile-name { font-size: min(1.05rem, 4.4vw, 4.4vh); font-weight: 800; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+.tile-time { font-size: min(1.5rem, 6vw, 5vh); font-weight: 800; font-variant-numeric: tabular-nums; opacity: .75; }
+.tile-state { font-size: min(0.7rem, 3vw); font-weight: 800; letter-spacing: .05em; min-height: 1em; opacity: .7; }
 .tile.g-PP, .tile.g-PK { border-style: dashed; }
 .tile.on { background: var(--on); border: 3px solid #fff; color: #000; box-shadow: 0 0 0 3px #000 inset; }
 .tile.on .tile-time, .tile.on .tile-state { opacity: 1; }
 
 .cap-events { grid-area: events; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.ev { min-height: 64px; border-radius: 14px; border: 2px solid rgba(255,255,255,.25); font-weight: 800; font-size: 0.95rem; line-height: 1.15; }
+.ev { min-height: 64px; border-radius: 14px; border: 2px solid rgba(255,255,255,.25); font-weight: 800; font-size: min(0.95rem, 3.8vw); line-height: 1.15; }
 .ev:active:not(:disabled) { transform: scale(0.96); filter: brightness(1.3); }
 .ev.gf { background: var(--gf); }
 .ev.ga { background: var(--ga); }
 .ev.pf, .ev.pa { background: var(--pen); }
 
 .cap-footer { grid-area: footer; display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
-.cap-footer button { min-height: 76px; border-radius: 16px; border: 0; font-weight: 900; font-size: 1.4rem; }
+.cap-footer button { min-height: 76px; border-radius: 16px; border: 0; font-weight: 900; font-size: min(1.4rem, 6vw); }
 .cap-footer button:active:not(:disabled) { transform: scale(0.97); filter: brightness(1.25); }
 .undo { background: #2a3f56; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 1.15rem !important; }
 .undo small { font-size: 0.75rem; font-weight: 600; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

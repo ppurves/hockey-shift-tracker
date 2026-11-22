@@ -3,6 +3,7 @@ import { generateDemoGame, isoDate, makeBackup, parseBackup, type Backup } from 
 import { appendEvents, exportAll, importGames, putSettings } from '../../data/db';
 import { canShareFiles, downloadFile } from '../../export/deliver';
 import { ConfirmSheet } from '../components/ConfirmSheet';
+import { UnitsEditor } from '../components/UnitsEditor';
 import { navigate } from '../hooks/useHashRoute';
 import { useSettings } from '../hooks/useSettings';
 
@@ -69,7 +70,25 @@ export function SettingsScreen() {
             onBlur={(e) => void save({ recipientEmail: e.target.value.trim() })}
           />
         </label>
+        <label>Default period length (minutes)
+          <input
+            type="number" inputMode="decimal" min="1" max="60" step="0.5"
+            defaultValue={settings.defaultPeriodLengthMs / 60_000}
+            onBlur={(e) => {
+              const m = Number(e.target.value);
+              if (m > 0 && m <= 60) void save({ defaultPeriodLengthMs: Math.round(m * 60_000) });
+            }}
+          />
+        </label>
+        <label className="toggle">
+          <input type="checkbox" checked={settings.audioTick} onChange={(e) => void save({ audioTick: e.target.checked })} />
+          <span>Audio tick on taps <small className="muted">(off by default; the silent switch mutes it)</small></span>
+        </label>
       </section>
+
+      <h2>Default units</h2>
+      <p className="muted small">Used for new games. Rename (e.g. “Smith-Jones-Lee”) or add Line 4 / a third D pair. Each game can still rename its own units.</p>
+      <UnitsEditor units={settings.defaultUnits} allowAddRemove onChange={(defaultUnits) => void save({ defaultUnits })} />
 
       <h2>Back up &amp; restore</h2>
       <p className="muted small">iOS can clear website storage in rare cases. Back up after each game and keep the file in Files or email.</p>

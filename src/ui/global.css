@@ -116,3 +116,35 @@ a.big-btn.as-link { display: flex; align-items: center; justify-content: center;
 .strip.okstrip { background: #144d33; color: #d5ffe9; }
 .page .strip { text-align: left; font-weight: 500; }
 .page a { color: #8cc4ff; }
+
+/* ---------- edit ---------- */
+.edit-list { list-style: none; padding: 0; display: grid; gap: 6px; }
+.edit-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--panel); border-radius: 10px; padding: 6px 6px 6px 12px; min-height: 60px; }
+.edit-list li.editing { background: #1d3a57; }
+.edit-list .btns { display: flex; gap: 6px; }
+.small-btn.primary { background: var(--navy); border-color: #6fa3d6; }
+.small-btn.danger { background: #5a1c1f; border-color: var(--danger); }
+.add-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 8px 0 12px; }
+.add-row select, .time-input input { font: inherit; min-height: 48px; border-radius: 10px; border: 1px solid #3a5a7a; background: #0f2236; color: var(--fg); padding: 0 10px; }
+.time-input { display: grid; gap: 2px; font-size: 0.8rem; color: var(--muted); }
+.time-input input { width: 84px; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.sum-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 10px; }
+
+/* ---------- units editor / toggles ---------- */
+.units-editor { display: grid; gap: 10px; }
+.units-editor fieldset { border: 1px solid #24425f; border-radius: 12px; padding: 8px 10px 10px; display: grid; gap: 6px; }
+.units-editor legend { font-weight: 700; padding: 0 4px; }
+.unit-row-edit { display: flex; gap: 6px; }
+.unit-row-edit input { flex: 1; font: inherit; min-height: 48px; padding: 0 10px; border-radius: 10px; border: 1px solid #3a5a7a; background: #0f2236; color: var(--fg); }
+.form label.toggle { display: flex; align-items: center; gap: 12px; min-height: 60px; font-weight: 600; }
+.toggle input { width: 28px; height: 28px; accent-color: var(--ok); }
+
+/* ---------- accessibility ---------- */
+/* iOS Dynamic Type: follow the user's text size setting (Settings > Display > Text Size). */
+@supports (font: -apple-system-body) {
+  html { font: -apple-system-body; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+}
+:focus-visible { outline: 3px solid #ffd23f; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
