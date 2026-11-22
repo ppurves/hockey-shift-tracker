@@ -5,6 +5,7 @@ import { navigate, useHashRoute } from './hooks/useHashRoute';
 import { useGameSession } from './hooks/useGameSession';
 import { Capture } from './screens/Capture';
 import { Home } from './screens/Home';
+import { Summary } from './screens/Summary';
 import { NewGame } from './screens/NewGame';
 
 type PersistState = 'unknown' | 'granted' | 'denied' | 'unsupported';
@@ -22,7 +23,7 @@ function usePersistentStorage(): PersistState {
   return state;
 }
 
-function GameRoute({ id }: { id: string }) {
+function GameRoute({ id, view }: { id: string; view?: string }) {
   const session = useGameSession(id);
   if (session === 'loading') return <main className="page"><p className="muted">Loading game…</p></main>;
   if (session === 'missing') {
@@ -33,18 +34,7 @@ function GameRoute({ id }: { id: string }) {
       </main>
     );
   }
-  if (session.meta.status === 'final') {
-    const { meta } = session;
-    return (
-      <main className="page">
-        <button className="link-btn" onClick={() => navigate('')}>‹ Games</button>
-        <h1>{meta.homeAway === 'home' ? 'vs' : '@'} {meta.opponent}</h1>
-        <p className="final-score">Final {meta.score.for}–{meta.score.against}</p>
-        <p className="muted">The summary and timeline arrive in M3.</p>
-        <button className="big-btn" onClick={() => void session.updateMeta({ status: 'live' })}>Reopen game</button>
-      </main>
-    );
-  }
+  if (view === 'summary' || session.meta.status === 'final') return <Summary session={session} />;
   return <Capture session={session} />;
 }
 
@@ -98,6 +88,6 @@ export function App() {
   );
 
   if (route[0] === 'new') return <NewGame />;
-  if (route[0] === 'game' && route[1]) return <GameRoute key={route[1]} id={route[1]} />;
+  if (route[0] === 'game' && route[1]) return <GameRoute key={route[1]} id={route[1]} view={route[2]} />;
   return <Home status={status} />;
 }

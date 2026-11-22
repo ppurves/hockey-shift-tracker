@@ -80,3 +80,30 @@ button:disabled { opacity: 0.4; cursor: default; }
 .toast { background: #f4f7fb; color: #0b1c2e; font-weight: 700; padding: 12px 18px; border-radius: 999px; max-width: 92vw; box-shadow: 0 6px 20px rgba(0,0,0,.4); animation: toast-in .12s ease-out; }
 .toast.error { background: var(--danger); color: #fff; }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
+
+/* ---------- summary ---------- */
+.summary { max-width: 1200px; }
+.sum-top { display: flex; justify-content: space-between; }
+.sum-score { font-variant-numeric: tabular-nums; margin-left: 8px; }
+.tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 12px 0; }
+.tabs button { min-height: 52px; border-radius: 12px; border: 2px solid #2f5070; background: var(--panel); font-weight: 800; font-size: 1.05rem; }
+.tabs button.sel { background: var(--navy); border-color: #6fa3d6; }
+.timeline-box { width: 100%; }
+.timeline-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; overscroll-behavior-x: contain; }
+.timeline-scroll svg { display: block; }
+.table-scroll { overflow-x: auto; }
+table.stats { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+table.stats th, table.stats td { padding: 8px 6px; text-align: right; border-bottom: 1px solid #22405e; white-space: nowrap; }
+table.stats thead th { color: var(--muted); font-size: 0.8rem; font-weight: 700; }
+table.stats tbody th { text-align: left; position: sticky; left: 0; background: var(--bg); }
+table.stats thead th:first-child { text-align: left; }
+.plus { color: var(--ok); }
+.minus { color: #ff8a65; }
+.warnc { color: var(--warn); }
+.goal-list { list-style: none; padding: 0; line-height: 1.9; }
+.gf-mark { color: #56b4e9; font-weight: 800; }
+.ga-mark { color: #ff8a3d; font-weight: 800; }
+@media (max-width: 480px) {
+  table.stats { font-size: 0.85rem; }
+  table.stats th, table.stats td { padding: 8px 3px; }
+}

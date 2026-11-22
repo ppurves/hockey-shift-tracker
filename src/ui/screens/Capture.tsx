@@ -70,7 +70,7 @@ export function Capture({ session }: { session: GameSession }) {
 
   const endGame = () => {
     if (livePeriod) run({ type: 'endPeriod' });
-    void updateMeta({ status: 'final' }).then(() => navigate(''));
+    void updateMeta({ status: 'final' }).then(() => navigate(`game/${meta.id}/summary`));
   };
 
   const openPeriodSheet = () => {
@@ -79,6 +79,7 @@ export function Capture({ session }: { session: GameSession }) {
       actions.push({ label: `End ${periodLabel(s.period!)} now`, tone: 'danger', onConfirm: () => { run({ type: 'endPeriod' }); setSheet(null); } });
     }
     actions.push({ label: `Start ${periodLabel(nextPeriod)}`, onConfirm: () => confirmStart(nextPeriod) });
+    actions.push({ label: 'View summary & timeline', onConfirm: () => navigate(`game/${meta.id}/summary`) });
     if (s.period !== null) actions.push({ label: 'End game', tone: 'danger', onConfirm: endGame });
     setSheet({
       title: s.period === null ? 'Periods' : `${periodLabel(s.period)}${s.periodEnded ? ' (ended)' : ''} · ${formatClock(gameMs)}`,
