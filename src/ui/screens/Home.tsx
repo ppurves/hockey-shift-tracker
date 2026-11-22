@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { generateDemoGame, type GameMeta } from '../../core';
-import { appendEvents, deleteGame, listGames } from '../../data/db';
+import type { GameMeta } from '../../core';
+import { deleteGame, listGames } from '../../data/db';
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { navigate } from '../hooks/useHashRoute';
 
@@ -10,18 +10,12 @@ export function Home({ status }: { status: React.ReactNode }) {
   const refresh = () => listGames().then(setGames);
   useEffect(() => { void refresh(); }, []);
 
-  const loadDemo = async () => {
-    const { meta, events } = generateDemoGame({ id: crypto.randomUUID(), startWall: Date.now() - 3 * 3600_000 });
-    await appendEvents(meta, events);
-    navigate(`game/${meta.id}`);
-  };
-
   return (
     <main className="page">
       <h1>Hockey Shift Tracker</h1>
       {status}
       <button className="big-btn primary" onClick={() => navigate('new')}>+ New game</button>
-      <button className="big-btn" onClick={loadDemo}>Load demo game</button>
+      <button className="big-btn" onClick={() => navigate('settings')}>⚙ Settings, backup &amp; demo</button>
       <h2>Games</h2>
       {games === null ? <p className="muted">Loading…</p> : games.length === 0 ? (
         <p className="muted">No games yet.</p>

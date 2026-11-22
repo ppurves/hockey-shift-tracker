@@ -1,0 +1,94 @@
+import { useRef, useState } from 'react';
+import { generateDemoGame, isoDate, makeBackup, parseBackup, type Backup } from '../../core';
+import { appendEvents, exportAll, importGames, putSettings } from '../../data/db';
+import { canShareFiles, downloadFile } from '../../export/deliver';
+import { ConfirmSheet } from '../components/ConfirmSheet';
+import { navigate } from '../hooks/useHashRoute';
+import { useSettings } from '../hooks/useSettings';
+
+export function SettingsScreen() {
+  const { settings, loaded, save } = useSettings();
+  const [msg, setMsg] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
+  const [pending, setPending] = useState<Backup | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const backup = async () => {
+    const b = makeBackup(await exportAll(), settings, Date.now());
+    const name = `hockey-shift-tracker-backup-${isoDate(Date.now())}.json`;
+    const file = new File([JSON.stringify(b)], name, { type: 'application/json' });
+    if (canShareFiles([file])) {
+      try {
+        await navigator.share({ files: [file], title: 'Hockey Shift Tracker backup' });
+        setMsg({ text: `Backup of ${b.games.length} games sent to the share sheet. Save it to Files or email it to yourself.`, tone: 'ok' });
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') { setMsg({ text: 'Backup cancelled.', tone: 'error' }); return; }
+      }
+    }
+    downloadFile(file, name);
+    setMsg({ text: `Backup of ${b.games.length} games downloaded as ${name}.`, tone: 'ok' });
+  };
+
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      setPending(parseBackup(await f.text()));
+    } catch (e) {
+      setMsg({ text: `Restore failed: ${(e as Error).message}`, tone: 'error' });
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const restore = async (b: Backup) => {
+    setPending(null);
+    await importGames(b.games);
+    await putSettings(b.settings);
+    setMsg({ text: `Restored ${b.games.length} games and settings.`, tone: 'ok' });
+    setTimeout(() => location.reload(), 800);
+  };
+
+  const loadDemo = async () => {
+    const { meta, events } = generateDemoGame({ id: crypto.randomUUID(), startWall: Date.now() - 3 * 3600_000 });
+    await appendEvents(meta, events);
+    navigate(`game/${meta.id}/summary`);
+  };
+
+  if (!loaded) return <main className="page"><p className="muted">Loading…</p></main>;
+
+  return (
+    <main className="page settings">
+      <button className="link-btn" onClick={() => navigate('')}>‹ Games</button>
+      <h1>Settings</h1>
+
+      <section className="form">
+        <label>Default email recipient
+          <input
+            type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
+            defaultValue={settings.recipientEmail}
+            onBlur={(e) => void save({ recipientEmail: e.target.value.trim() })}
+          />
+        </label>
+      </section>
+
+      <h2>Back up &amp; restore</h2>
+      <p className="muted small">iOS can clear website storage in rare cases. Back up after each game and keep the file in Files or email.</p>
+      <button className="big-btn primary" onClick={() => void backup()}>Back up all data</button>
+      <button className="big-btn" onClick={() => fileRef.current?.click()}>Restore from backup…</button>
+      <input ref={fileRef} type="file" accept="application/json,.json" hidden data-testid="restore-input" onChange={(e) => void onFile(e.target.files?.[0])} />
+      {msg && <p className={`strip ${msg.tone === 'ok' ? 'okstrip' : 'error'}`} role="status">{msg.text}</p>}
+
+      <h2>Demo</h2>
+      <button className="big-btn" onClick={() => void loadDemo()}>Load demo game</button>
+
+      {pending && (
+        <ConfirmSheet
+          title={`Restore ${pending.games.length} games?`}
+          message={`Backup from ${pending.exportedAt.slice(0, 16).replace('T', ' ')}. Games with the same id are replaced; other games on this phone are kept. Settings are replaced.`}
+          actions={[{ label: 'Restore', onConfirm: () => void restore(pending) }]}
+          onCancel={() => setPending(null)}
+        />
+      )}
+    </main>
+  );
+}

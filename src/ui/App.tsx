@@ -6,6 +6,8 @@ import { useGameSession } from './hooks/useGameSession';
 import { Capture } from './screens/Capture';
 import { Home } from './screens/Home';
 import { Summary } from './screens/Summary';
+import { Export } from './screens/Export';
+import { SettingsScreen } from './screens/Settings';
 import { NewGame } from './screens/NewGame';
 
 type PersistState = 'unknown' | 'granted' | 'denied' | 'unsupported';
@@ -34,6 +36,7 @@ function GameRoute({ id, view }: { id: string; view?: string }) {
       </main>
     );
   }
+  if (view === 'export') return <Export session={session} />;
   if (view === 'summary' || session.meta.status === 'final') return <Summary session={session} />;
   return <Capture session={session} />;
 }
@@ -88,6 +91,7 @@ export function App() {
   );
 
   if (route[0] === 'new') return <NewGame />;
+  if (route[0] === 'settings') return <SettingsScreen />;
   if (route[0] === 'game' && route[1]) return <GameRoute key={route[1]} id={route[1]} view={route[2]} />;
   return <Home status={status} />;
 }

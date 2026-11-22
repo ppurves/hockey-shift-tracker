@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('demo game: summary, timeline tabs and TOI check', async ({ page }) => {
-  await page.goto('./');
+  await page.goto('./#/settings');
   await page.getByRole('button', { name: 'Load demo game' }).click();
   await expect(page.getByRole('heading', { name: /Demo Hawks/ })).toBeVisible();
   await expect(page.getByTestId('summary-score')).toHaveText('4–2');
