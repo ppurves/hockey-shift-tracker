@@ -57,3 +57,20 @@ export interface UnitStats {
   ga: number;
   plusMinus: number;
 }
+
+export type GameStatus = 'live' | 'final';
+
+/** Everything about a game except its event log. */
+export interface GameMeta {
+  id: string;
+  opponent: string;
+  /** YYYY-MM-DD (local date). */
+  date: string;
+  homeAway: 'home' | 'away';
+  periodLengthMs: number;
+  units: UnitDef[];
+  status: GameStatus;
+  score: { for: number; against: number };
+  createdAt: number;
+  updatedAt: number;
+}

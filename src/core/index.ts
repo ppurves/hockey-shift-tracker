@@ -6,3 +6,4 @@ export * from './units';
 export * from './format';
 export * from './engine';
 export * from './stats';
+export * from './game';
