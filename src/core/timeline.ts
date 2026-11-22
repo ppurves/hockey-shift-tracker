@@ -110,7 +110,9 @@ export function timelineSvg(opts: TimelineOptions): TimelineResult {
       const major = m % 5 === 0;
       if (!major && plotW / (totalMs / 60_000) < 6) continue; // too dense
       out.push(`<line x1="${n(gx)}" y1="${rowsTop}" x2="${n(gx)}" y2="${rowsBottom}" stroke="${major ? c.gridMajor : c.grid}" stroke-width="${major && m === 0 ? 2 : 1}"/>`);
-      if (major && m > 0) {
+      const isLastSeg = s === segs[segs.length - 1];
+      // Skip the end-of-period label where the next period's "P#" label starts.
+      if (major && m > 0 && (isLastSeg || (m + 1) * 60_000 <= s.length)) {
         const anchor = gx > width - RIGHT_PAD - 16 ? 'end' : 'middle';
         out.push(`<text x="${n(gx)}" y="${rowsBottom + 15}" fill="${c.muted}" font-size="11" text-anchor="${anchor}">${m}:00</text>`);
       }
