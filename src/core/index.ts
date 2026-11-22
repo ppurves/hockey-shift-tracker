@@ -12,3 +12,4 @@ export * from './timeline';
 export * from './csv';
 export * from './settings';
 export * from './backup';
+export * from './edit';
