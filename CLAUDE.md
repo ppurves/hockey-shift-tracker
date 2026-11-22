@@ -55,6 +55,23 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 - The big bottom button changes with state: Start P*n* (confirm sheet) → Pause all → ▶ Resume. Period changes and End game live in the period menu (P1 ▾), behind a confirm sheet.
 - The "Update available" banner only shows on the games list, never mid-game.
 
+## Export, email, backup (src/export, core/csv.ts, core/backup.ts)
+- Files are named `YYYY-MM-DD_vs_Opponent_{report.pdf,summary.csv,shifts.csv,events.csv}` (`fileBase`).
+- CSVs have a UTF-8 BOM and CRLF line endings. Times are given as m:ss plus a seconds column. Text cells starting with `= + - @` get a `'` prefix to block formula injection.
+- `buildPdf` (jsPDF, Letter landscape, 2 pages, `compress: true`):
+  - Page 1: header, stats table, goals.
+  - Page 2: full-game timeline (light-theme SVG → canvas → **JPEG**) and TOI by period.
+  - It uses ASCII text only, because Helvetica has no glyphs for — ▲ ▼. The demo PDF is about 180 KB.
+  - jsPDF is lazy-loaded, so it lives in its own chunk.
+- **iOS share rule:** `navigator.share` must run inside the tap, with nothing slow before it. The Export screen builds the files **when it opens**, so "Email me the data" can call share straight away.
+- Delivery paths, in order:
+  1. Share sheet with all 4 files.
+  2. If that's unavailable or fails (except when the user cancels): download the 4 files and open a `mailto:` draft with the text summary. That draft has no attachments, and the screen says so.
+  
+  The screen always states which path was used.
+- Backup: one JSON file `{app, version, exportedAt, settings, games: [{meta, events}]}`. `parseBackup` validates it and gives readable errors. Restore replaces games with the same id and keeps the rest.
+- IndexedDB v2 adds a `settings` store (key `'settings'`). `normalizeSettings` fills in defaults.
+
 ## How a new version reaches the phone
 Push to main → Pages deploys in ~2 min. On the next launch the app checks for a new service worker in the background. When it's installed, an **"Update available, tap to reload"** banner appears. Tapping it activates the new version. If you don't tap, the old version keeps running (safe mid-game). To force it, close the app fully and reopen it twice.
 
