@@ -7,3 +7,5 @@ export * from './format';
 export * from './engine';
 export * from './stats';
 export * from './game';
+export * from './demo';
+export * from './timeline';

@@ -87,3 +87,35 @@ export function periodLengths(events: readonly GameEvent[]): Record<number, numb
   for (const e of events) if (e.type === 'periodEnd') out[e.period] = e.gameMs;
   return out;
 }
+
+export interface ToiCheckRow {
+  period: number;
+  /** Game-clock length of the period (live time for the period in progress). */
+  clockMs: number;
+  /** Sum of TOI per exclusion set: F, D and special teams (PP + PK). */
+  sums: { F: number; D: number; ST: number };
+}
+
+/**
+ * Sanity check per period: forward TOI and D TOI should each equal the game
+ * clock when a line/pair was always on the ice (they can't exceed it).
+ * Special teams only play part of the period.
+ */
+export function toiCheck(units: readonly UnitDef[], events: readonly GameEvent[], liveGameMs?: number): ToiCheckRow[] {
+  const lengths = periodLengths(events);
+  const started = [...new Set(events.filter((e) => e.type === 'periodStart').map((e) => e.period))].sort((a, b) => a - b);
+  const shifts = deriveShifts(events, liveGameMs);
+  const setOf = (id: string) => {
+    const g = units.find((u) => u.id === id)?.group;
+    return g === 'PP' || g === 'PK' ? 'ST' : g;
+  };
+  return started.map((period) => {
+    const sums = { F: 0, D: 0, ST: 0 };
+    for (const s of shifts) {
+      if (s.period !== period) continue;
+      const k = setOf(s.unitId);
+      if (k) sums[k] += shiftMs(s);
+    }
+    return { period, clockMs: lengths[period] ?? liveGameMs ?? 0, sums };
+  });
+}
