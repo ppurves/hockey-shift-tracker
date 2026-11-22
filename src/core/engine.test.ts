@@ -206,6 +206,47 @@ describe('goals and +/-', () => {
   });
 });
 
+describe('auto-pause on goals and penalties', () => {
+  it.each(['goalFor', 'goalAgainst', 'penaltyFor', 'penaltyAgainst'] as const)(
+    '%s pauses a running clock in the same action',
+    (type) => {
+      const g = startedGame();
+      run(g, tap('L1'));
+      advance(70 * SEC);
+      const before = g.events.length;
+      run(g, { type });
+      const added = g.events.slice(before);
+      expect(added.map((e) => e.type)).toEqual([type, 'pause']);
+      expect(added[0].txn).toBe(added[1].txn);
+      expect(g.state.running).toBe(false);
+      advance(2 * MIN); // celebration / faceoff delay is not game time
+      expect(g.gameMs()).toBe(70 * SEC);
+      expect(statFor(live(g), 'L1')).toMatchObject({ shifts: 1, toiMs: 70 * SEC });
+      expect(g.state.active).toHaveProperty('L1'); // units stay on
+    },
+  );
+
+  it('while already paused, records the event without another pause', () => {
+    const g = startedGame();
+    run(g, { type: 'pause' });
+    const before = g.events.length;
+    run(g, { type: 'goalAgainst' });
+    expect(g.events.slice(before).map((e) => e.type)).toEqual(['goalAgainst']);
+  });
+
+  it('undoing the goal also undoes its auto-pause', () => {
+    const g = startedGame();
+    advance(30 * SEC);
+    run(g, { type: 'goalFor' });
+    expect(g.peekUndo()?.label).toBe('goal for');
+    advance(10 * SEC);
+    g.undo();
+    expect(g.state.running).toBe(true);
+    expect(g.state.score.for).toBe(0);
+    expect(g.gameMs()).toBe(40 * SEC);
+  });
+});
+
 describe('undo', () => {
   /** Builds a game to a known state, then returns stats at a fixed later time. */
   function snapshot(g: GameEngine) {
@@ -291,9 +332,9 @@ describe('restart and background', () => {
     const g = startedGame();
     run(g, tap('L1'), tap('D1'));
     advance(45 * SEC);
-    run(g, tap('L2'), { type: 'goalFor' });
+    run(g, tap('L2'), { type: 'goalFor' }, { type: 'resume' }); // goal auto-pauses
     advance(20 * SEC);
-    run(g, tap('PP1'), { type: 'penaltyAgainst' });
+    run(g, { type: 'penaltyAgainst' }, tap('PP1'), { type: 'resume' });
     advance(10 * SEC);
     return g;
   }

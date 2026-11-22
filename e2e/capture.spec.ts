@@ -32,11 +32,12 @@ test('live capture: shifts, goal, pause, force-quit restore, undo', async ({ pag
   await expect(tile(page, 'L2')).toHaveAttribute('aria-pressed', 'true');
   await expect(tile(page, 'D1')).toHaveAttribute('aria-pressed', 'true');
 
+  // Goal For records the goal and auto-pauses the clock.
   await page.getByRole('button', { name: /Goal\s*For/ }).click();
   await expect(page.getByTestId('score')).toContainText('1–0');
+  await expect(page.getByText('PAUSED')).toBeVisible();
 
-  // Pause: 5 minutes of real time must not move any clock.
-  await page.getByRole('button', { name: 'Pause all' }).click();
+  // While paused, 5 minutes of real time must not move any clock.
   await page.clock.fastForward('05:00');
   await expect(clock(page)).toContainText('1:45');
 
@@ -63,12 +64,10 @@ test('live capture: shifts, goal, pause, force-quit restore, undo', async ({ pag
   await expect(page.getByText('Undone: resume')).toBeVisible();
   await expect(page.getByText('PAUSED')).toBeVisible();
   await expect(clock(page)).toContainText('1:45');
-  await expect(undo).toContainText('pause');
-  await undo.click(); // undo the pause: clock as if it never paused
-  await expect(clock(page)).toContainText('7:30');
   await expect(undo).toContainText('goal for');
-  await undo.click();
+  await undo.click(); // removes the goal and its auto-pause: clock as if it never stopped
   await expect(page.getByTestId('score')).toContainText('0–0');
+  await expect(clock(page)).toContainText('7:30');
 
   // End P1 via the period menu: everything comes off, P2 waits paused at 0:00.
   await page.getByRole('button', { name: 'Period options' }).click();

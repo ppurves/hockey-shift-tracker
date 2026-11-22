@@ -202,12 +202,16 @@ export function plan(
       if (!inLivePeriod) return fail('No period in progress');
       const onIce = units.filter((u) => state.active[u.id]).map((u) => u.id);
       push({ type: cmd.type, onIce, strength: strengthOf(onIce, units) });
+      // Play stops for a goal: auto-pause in the same txn, so Undo reverts both.
+      if (state.running) push({ type: 'pause' });
       break;
     }
     case 'penaltyFor':
     case 'penaltyAgainst':
       if (!inLivePeriod) return fail('No period in progress');
       push({ type: cmd.type });
+      // Play stops for a penalty call: auto-pause in the same txn.
+      if (state.running) push({ type: 'pause' });
       break;
   }
   return { ok: true, events: out };
@@ -228,6 +232,7 @@ export function describeTxn(txnEvents: readonly GameEvent[], units: readonly Uni
   const main =
     txnEvents.find((e) => e.type === 'periodStart') ??
     txnEvents.find((e) => e.type === 'periodEnd') ??
+    txnEvents.find((e) => e.type.startsWith('goal') || e.type.startsWith('penalty')) ??
     txnEvents.find((e) => e.type === 'unitOn') ??
     txnEvents[txnEvents.length - 1];
   if (!main) return 'nothing';
