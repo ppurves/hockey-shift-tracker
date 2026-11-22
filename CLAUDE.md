@@ -41,6 +41,15 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 - Goal events store an `onIce` snapshot and a `strength`. Stats credit GF/GA from that snapshot. A post-game edit that changes shifts must recompute the snapshot.
 - `purity.test.ts` fails if src/core imports React/idb or uses DOM globals, `setInterval`/`setTimeout`, or `Date.now`.
 
+## UI layer (src/ui, src/data)
+- Routes are hash-based: `#/` (games), `#/new`, `#/game/:id`. A Home Screen launch has no hash, so `App` jumps straight into the in-progress (`status: 'live'`) game. This is the force-quit restore.
+- `src/data/db.ts` is the IndexedDB layer: a `games` store (GameMeta) and an `events` store keyed `[gameId, seq]`. `appendEvents`/`removeEvents` update the events and the game record in one transaction.
+- `useGameSession(gameId)`: the engine updates synchronously for instant UI, then each change is written through to IndexedDB. A failed write shows a red "NOT SAVED" strip.
+- `useDisplayClock(running)` is a rAF re-render trigger (~4 Hz) used for display only. `useWakeLock(enabled)` re-acquires the lock on visibilitychange and on the next tap, and the screen shows a warning strip if it's unavailable. There is no NoSleep video fallback (iOS 18.4+ supports wake lock in Home Screen apps).
+- `TapButton` acts on pointerdown. Keyboard activation goes through click with `detail === 0`. Don't add onClick handlers to tiles.
+- The big bottom button changes with state: Start P*n* (confirm sheet) → Pause all → ▶ Resume. Period changes and End game live in the period menu (P1 ▾), behind a confirm sheet.
+- The "Update available" banner only shows on the games list, never mid-game.
+
 ## How a new version reaches the phone
 Push to main → Pages deploys in ~2 min. On the next launch the app checks for a new service worker in the background. When it's installed, an **"Update available, tap to reload"** banner appears. Tapping it activates the new version. If you don't tap, the old version keeps running (safe mid-game). To force it, close the app fully and reopen it twice.
 
