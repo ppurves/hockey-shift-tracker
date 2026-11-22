@@ -23,6 +23,24 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 - `src/ui/` — React components and hooks (`useGameSession` wraps the engine: rendering, wake lock, IndexedDB write-through persistence).
 - `e2e/` — Playwright. `pwa.spec.ts` replaces Lighthouse's PWA audit (removed in Lighthouse 12): checks CDP `Page.getInstallabilityErrors` is empty and the app reloads offline.
 
+## Engine API (src/core)
+- `types.ts`: `UnitDef`, `GameEvent` (each has `seq`, `txn`, `period`, `gameMs`, `wallTs`), `Shift`, `UnitStats`.
+- `units.ts`: `DEFAULT_UNITS`, `exclusionSet(group)`, which returns F / D / ST (PP and PK share ST).
+- `engine.ts`:
+  - `reduce`/`replay` is the pure reducer.
+  - `gameMsAt(state, now)` gives the live clock.
+  - `plan(events, state, units, cmd, now)` turns a command into new events and enforces all rules.
+  - `undoLast` removes the last **txn**, so a line change, a period change or another multi-event action is undone in one step.
+  - `describeTxn` gives the label for the Undo toast.
+  - `GameEngine` is a thin wrapper that the UI hook uses: `dispatch`, `undo`, `peekUndo`, `gameMs`.
+- `stats.ts`:
+  - `deriveShifts(events, liveGameMs?)` returns every shift.
+  - `computeStats(units, events, {period?, liveGameMs?})` gives per-unit stats, with `null` instead of dividing by zero.
+  - `periodLengths` returns how long each period ran.
+- `format.ts`: `formatClock` (m:ss) and `formatMaybe` (null → "—").
+- Goal events store an `onIce` snapshot and a `strength`. Stats credit GF/GA from that snapshot. A post-game edit that changes shifts must recompute the snapshot.
+- `purity.test.ts` fails if src/core imports React/idb or uses DOM globals, `setInterval`/`setTimeout`, or `Date.now`.
+
 ## How a new version reaches the phone
 Push to main → Pages deploys in ~2 min. On the next launch the app checks for a new service worker in the background. When it's installed, an **"Update available, tap to reload"** banner appears. Tapping it activates the new version. If you don't tap, the old version keeps running (safe mid-game). To force it, close the app fully and reopen it twice.
 
