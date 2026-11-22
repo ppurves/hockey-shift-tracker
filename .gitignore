@@ -25,3 +25,8 @@ desktop.ini
 # Editor
 .idea/
 *.swp
+
+# Playwright
+test-results/
+playwright-report/
+*.tsbuildinfo
