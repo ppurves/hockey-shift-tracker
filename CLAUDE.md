@@ -38,6 +38,11 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
   - `computeStats(units, events, {period?, liveGameMs?})` gives per-unit stats, with `null` instead of dividing by zero.
   - `periodLengths` returns how long each period ran.
 - `format.ts`: `formatClock` (m:ss) and `formatMaybe` (null → "—").
+- `timeline.ts`: `timelineSvg({units, events, period | 'all', periodLengthMs, liveGameMs?, width?, theme?})` returns a standalone SVG string with inline colours. The summary screen and the PDF both use it.
+  - Bars: F `#56b4e9`, D `#009e73`, PP `#e69f00`, PK `#cc79a7`.
+  - Goals: ▲ for `#0072b2`, ▼ against `#d55e00`, with a white outline. Penalties are flags: filled for "for", hollow for "against".
+- `demo.ts`: `generateDemoGame({id, startWall, seed?})` drives the real engine with a fake clock. It's deterministic. Demo convention only: "penalty for" means we go on the PP. The app itself never interprets penalties.
+- `stats.ts` `toiCheck`: per period, F TOI and D TOI vs the game clock. It's shown on the summary.
 - Goal events store an `onIce` snapshot and a `strength`. Stats credit GF/GA from that snapshot. A post-game edit that changes shifts must recompute the snapshot.
 - `purity.test.ts` fails if src/core imports React/idb or uses DOM globals, `setInterval`/`setTimeout`, or `Date.now`.
 
@@ -80,6 +85,7 @@ Events and stats:
 - Append-only event log is the source of truth: periodStart, periodEnd, pause, resume, unitOn, unitOff, goalFor, goalAgainst, penaltyFor, penaltyAgainst. Each has period, gameMs, wallTs. Shifts and stats are pure derivations from it (Undo = drop last event(s)).
 - Goals snapshot on-ice units; each gets GF/GA → +/-. Goal strength EV/PP/PK from the active PP/PK unit.
 - Penalties: count + timeline marker only; never auto-start PP/PK.
+- **Goals and penalties auto-pause the clock** (play stops). The goal/penalty event and the `pause` share one txn, so Undo reverts both and the clock runs as if nothing happened. If the clock is already paused, no extra pause is added.
 - Per-unit stats (overall + per period): shifts, TOI, avg, longest, shortest, GF, GA, +/-. Averages show "—" with 0 shifts.
 - Sanity check: per group, sum of TOI ≤ game clock (equal if a unit of that group was always on). Do not sum across groups.
 - Persist every event to IndexedDB immediately (write-through).
