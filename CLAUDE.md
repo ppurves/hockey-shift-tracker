@@ -72,8 +72,31 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 - Backup: one JSON file `{app, version, exportedAt, settings, games: [{meta, events}]}`. `parseBackup` validates it and gives readable errors. Restore replaces games with the same id and keeps the rest.
 - IndexedDB v2 adds a `settings` store (key `'settings'`). `normalizeSettings` fills in defaults.
 
+## Post-game edits (core/edit.ts, screens/Edit.tsx)
+- Only for **final** games. Live games stay append-only with Undo.
+- `editShift` / `addShift` / `deleteShift` / `addMarker` / `deleteMarker` return `{ok, events}` or `{ok:false, reason}`. Each one rewrites the log:
+  - Sorted per period: periodStart first, periodEnd last, then by gameMs. An edited unitOff sorts first among ties and an edited unitOn last.
+  - `seq` is renumbered.
+  - Every goal's `onIce` and `strength` are recomputed by replaying the log. An unedited log comes out identical, which is tested.
+- Validation: the end must be after the start, times must be within the period, and shifts can't overlap within an exclusion set (F, D, or PP+PK). Added events get `wallTs: 0`.
+- Saving goes through `session.replaceLog` → `replaceEvents`, which writes the events and the game score in one transaction.
+
+## Settings
+Stored in the IndexedDB `settings` store:
+- `recipientEmail`
+- `defaultPeriodLengthMs`
+- `audioTick` (Web Audio click, off by default; the iPhone's silent switch mutes it)
+- `defaultUnits` (rename; add or remove units per group with `nextUnit`; minimum one F and one D)
+
+New Game copies the default units, and they can be renamed for that game only. On Capture, more than 4 PP+PK units split into a PP row and a PK row.
+
+## Accessibility
+- Dynamic Type via `font: -apple-system-body`. Capture-screen text is capped with `min(rem, vw)` so tiles never overflow.
+- `:focus-visible` rings, `prefers-reduced-motion` support, and aria labels on every tile and button.
+- Goal markers differ by shape as well as colour (▲/▼, Okabe-Ito).
+
 ## How a new version reaches the phone
-Push to main → Pages deploys in ~2 min. On the next launch the app checks for a new service worker in the background. When it's installed, an **"Update available, tap to reload"** banner appears. Tapping it activates the new version. If you don't tap, the old version keeps running (safe mid-game). To force it, close the app fully and reopen it twice.
+Push to main → Pages deploys in ~2 min. The app checks for a new service worker on launch and whenever it returns to the foreground (`reg.update()` on visibilitychange). When it's installed, an **"Update available, tap to reload"** banner appears. Tapping it activates the new version. If you don't tap, the old version keeps running (safe mid-game). To force it, close the app fully and reopen it twice.
 
 ## iPhone PWA rules
 - Manifest: standalone, `orientation: any`, theme `#1f4e79`, icons 192/512/maskable + 180 apple-touch-icon; apple-mobile-web-app-* meta tags; `viewport-fit=cover` + `env(safe-area-inset-*)`.
