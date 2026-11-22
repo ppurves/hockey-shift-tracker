@@ -61,7 +61,10 @@ export function Summary({ session }: { session: GameSession }) {
       </h1>
       <p className="muted small">{meta.date} · {live ? 'in progress' : 'final'} · periods of {formatClock(meta.periodLengthMs)}</p>
 
-      <button className="big-btn primary" onClick={() => navigate(`game/${meta.id}/export`)}>✉ Export &amp; email</button>
+      <div className="sum-actions">
+        <button className="big-btn primary" onClick={() => navigate(`game/${meta.id}/export`)}>✉ Export &amp; email</button>
+        {!live && <button className="big-btn" onClick={() => navigate(`game/${meta.id}/edit`)}>✎ Edit shifts &amp; events</button>}
+      </div>
 
       <div className="tabs" role="tablist" aria-label="Period">
         {[...periods, 'all' as const].map((p) => (

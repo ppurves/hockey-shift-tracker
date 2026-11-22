@@ -7,6 +7,7 @@ import { Capture } from './screens/Capture';
 import { Home } from './screens/Home';
 import { Summary } from './screens/Summary';
 import { Export } from './screens/Export';
+import { Edit } from './screens/Edit';
 import { SettingsScreen } from './screens/Settings';
 import { NewGame } from './screens/NewGame';
 
@@ -37,6 +38,7 @@ function GameRoute({ id, view }: { id: string; view?: string }) {
     );
   }
   if (view === 'export') return <Export session={session} />;
+  if (view === 'edit') return <Edit session={session} />;
   if (view === 'summary' || session.meta.status === 'final') return <Summary session={session} />;
   return <Capture session={session} />;
 }
@@ -46,7 +48,17 @@ export function App() {
     offlineReady: [offlineReady],
     needRefresh: [needRefresh],
     updateServiceWorker,
-  } = useRegisterSW();
+  } = useRegisterSW({
+    // iOS Home Screen apps rarely check for updates on their own: check
+    // whenever the app comes to the foreground. The banner only shows on the
+    // games list, never mid-game.
+    onRegisteredSW(_url, reg) {
+      if (!reg) return;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && navigator.onLine) reg.update().catch(() => {});
+      });
+    },
+  });
   const [controlled, setControlled] = useState(!!navigator.serviceWorker?.controller);
   const persist = usePersistentStorage();
   const route = useHashRoute();

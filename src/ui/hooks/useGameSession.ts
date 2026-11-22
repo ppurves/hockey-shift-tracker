@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { GameEngine, type Command, type CommandResult, type GameEvent, type GameMeta } from '../../core';
-import { appendEvents, getEvents, getGame, putGame, removeEvents } from '../../data/db';
+import { appendEvents, getEvents, getGame, putGame, removeEvents, replaceEvents } from '../../data/db';
 
 export interface GameSession {
   meta: GameMeta;
@@ -8,6 +8,8 @@ export interface GameSession {
   dispatch: (cmd: Command) => CommandResult;
   undo: () => GameEvent[];
   updateMeta: (patch: Partial<GameMeta>) => Promise<void>;
+  /** Replaces the whole log (post-game edits) and saves it. */
+  replaceLog: (events: GameEvent[]) => Promise<void>;
   /** Set when a write to storage failed: the UI must show it loudly. */
   saveError: string | null;
 }
@@ -73,6 +75,15 @@ export function useGameSession(gameId: string): GameSession | 'loading' | 'missi
     await putGame(metaRef.current).catch(onSaveFail);
   }, []);
 
+  const replaceLog = useCallback(async (events: GameEvent[]) => {
+    const meta = metaRef.current;
+    if (!meta) return;
+    const next = new GameEngine(meta.units, Date.now, events);
+    metaRef.current = { ...meta, score: { ...next.state.score }, updatedAt: Date.now() };
+    setLoaded({ meta: metaRef.current, engine: next });
+    await replaceEvents(metaRef.current, events).then(() => setSaveError(null), onSaveFail);
+  }, []);
+
   if (typeof loaded !== 'object') return loaded;
-  return { meta: metaRef.current!, engine: loaded.engine, dispatch, undo, updateMeta, saveError };
+  return { meta: metaRef.current!, engine: loaded.engine, dispatch, undo, updateMeta, replaceLog, saveError };
 }
