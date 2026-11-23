@@ -43,6 +43,11 @@
 .tile.g-PP, .tile.g-PK { border-style: dashed; }
 .tile.on { background: var(--on); border: 3px solid #fff; color: #000; box-shadow: 0 0 0 3px #000 inset; }
 .tile.on .tile-time, .tile.on .tile-state { opacity: 1; }
+/* Shift over 1:30: red instead of yellow. */
+.tile.on.long-shift { background: var(--long); color: #fff; }
+/* Off over 5:00: red text. */
+.tile.long-rest { color: var(--long-text); border-color: var(--long-text); }
+.tile.long-rest .tile-time, .tile.long-rest .tile-state { opacity: 1; }
 
 .cap-events { grid-area: events; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .ev { min-height: 64px; border-radius: 14px; border: 2px solid rgba(255,255,255,.25); font-weight: 800; font-size: min(0.95rem, 3.8vw); line-height: 1.15; }

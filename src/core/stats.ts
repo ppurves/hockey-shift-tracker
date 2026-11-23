@@ -55,9 +55,15 @@ export function computeStats(
   events: readonly GameEvent[],
   opts: { period?: number; liveGameMs?: number } = {},
 ): UnitStats[] {
-  const shifts = deriveShifts(events, opts.liveGameMs).filter(
-    (s) => opts.period === undefined || s.period === opts.period,
-  );
+  const all = deriveShifts(events, opts.liveGameMs);
+  const shifts = all.filter((s) => opts.period === undefined || s.period === opts.period);
+  // Game-clock offset of each period, so rest can span a period break.
+  const lengths = periodLengths(events);
+  const started = [...new Set(events.filter((e) => e.type === 'periodStart').map((e) => e.period))].sort((a, b) => a - b);
+  const offset: Record<number, number> = {};
+  let acc = 0;
+  for (const p of started) { offset[p] = acc; acc += lengths[p] ?? 0; }
+  const abs = (period: number, ms: number) => (offset[period] ?? 0) + ms;
   const goals = events.filter(
     (e): e is Extract<GameEvent, { type: 'goalFor' | 'goalAgainst' }> =>
       (e.type === 'goalFor' || e.type === 'goalAgainst') && (opts.period === undefined || e.period === opts.period),
@@ -67,6 +73,15 @@ export function computeStats(
     const toiMs = lens.reduce((a, b) => a + b, 0);
     const gf = goals.filter((g) => g.type === 'goalFor' && g.onIce.includes(u.id)).length;
     const ga = goals.filter((g) => g.type === 'goalAgainst' && g.onIce.includes(u.id)).length;
+    // Rests: gaps between consecutive shifts, counted in the period the next shift starts in.
+    const mine = all
+      .filter((s) => s.unitId === u.id)
+      .sort((a, b) => abs(a.period, a.startMs) - abs(b.period, b.startMs));
+    const rests: number[] = [];
+    for (let i = 1; i < mine.length; i++) {
+      if (opts.period !== undefined && mine[i].period !== opts.period) continue;
+      rests.push(Math.max(0, abs(mine[i].period, mine[i].startMs) - abs(mine[i - 1].period, mine[i - 1].endMs)));
+    }
     return {
       unitId: u.id,
       shifts: lens.length,
@@ -74,6 +89,7 @@ export function computeStats(
       avgMs: lens.length ? Math.round(toiMs / lens.length) : null,
       longestMs: lens.length ? Math.max(...lens) : null,
       shortestMs: lens.length ? Math.min(...lens) : null,
+      avgRestMs: rests.length ? Math.round(rests.reduce((a, b) => a + b, 0) / rests.length) : null,
       gf,
       ga,
       plusMinus: gf - ga,

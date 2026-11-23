@@ -26,6 +26,10 @@ export interface GameState {
   active: Record<string, ActiveShift>;
   /** unitId -> length of the unit's most recent completed shift. */
   lastShiftMs: Record<string, number>;
+  /** Game-clock time of all periods before the current one. */
+  priorPeriodsMs: number;
+  /** unitId -> game-clock time (priorPeriodsMs + gameMs) when its last shift ended. */
+  lastOffTotalMs: Record<string, number>;
   score: { for: number; against: number };
   lastTxn: number;
 }
@@ -39,6 +43,8 @@ export const INITIAL_STATE: GameState = {
   runningSinceWall: 0,
   active: {},
   lastShiftMs: {},
+  priorPeriodsMs: 0,
+  lastOffTotalMs: {},
   score: { for: 0, against: 0 },
   lastTxn: 0,
 };
@@ -59,9 +65,11 @@ export function reduce(s: GameState, e: GameEvent): GameState {
         accMs: 0,
         runningSinceWall: 0,
         active: {},
+        priorPeriodsMs: s.period === null ? 0 : s.priorPeriodsMs + s.accMs,
+        lastOffTotalMs: closeActive(s, s.accMs),
       };
     case 'periodEnd':
-      return { ...next, periodEnded: true, running: false, accMs: e.gameMs, active: {} };
+      return { ...next, periodEnded: true, running: false, accMs: e.gameMs, active: {}, lastOffTotalMs: closeActive(s, e.gameMs) };
     case 'pause':
       return { ...next, running: false, accMs: e.gameMs };
     case 'resume':
@@ -76,6 +84,7 @@ export function reduce(s: GameState, e: GameEvent): GameState {
         ...next,
         active: rest,
         lastShiftMs: { ...s.lastShiftMs, [e.unitId]: Math.max(0, e.gameMs - open.startMs) },
+        lastOffTotalMs: { ...s.lastOffTotalMs, [e.unitId]: s.priorPeriodsMs + e.gameMs },
       };
     }
     case 'goalFor':
@@ -86,6 +95,30 @@ export function reduce(s: GameState, e: GameEvent): GameState {
     case 'penaltyAgainst':
       return next;
   }
+}
+
+/** Marks every open shift as ended at `gameMs` of the current period. */
+function closeActive(s: GameState, gameMs: number): Record<string, number> {
+  const ids = Object.keys(s.active);
+  if (!ids.length) return s.lastOffTotalMs;
+  const out = { ...s.lastOffTotalMs };
+  for (const id of ids) out[id] = s.priorPeriodsMs + gameMs;
+  return out;
+}
+
+/** Shifts longer than this are flagged on the capture screen. */
+export const LONG_SHIFT_MS = 90_000;
+/** Rest (time since last shift) longer than this is flagged on the capture screen. */
+export const LONG_REST_MS = 300_000;
+
+/**
+ * Game-clock time since the unit's last shift ended, counting across periods
+ * (intermissions and pauses don't count). null if it hasn't had a shift or is on.
+ */
+export function restMsAt(s: GameState, unitId: string, gameMs: number): number | null {
+  const off = s.lastOffTotalMs[unitId];
+  if (off === undefined || s.active[unitId]) return null;
+  return Math.max(0, s.priorPeriodsMs + gameMs - off);
 }
 
 export function replay(events: readonly GameEvent[]): GameState {

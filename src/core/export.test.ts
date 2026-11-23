@@ -36,7 +36,7 @@ describe('csv', () => {
     const csv = summaryCsv(demo.meta, demo.events);
     expect(csv.startsWith('﻿')).toBe(true);
     const lines = parse(csv);
-    expect(lines[0]).toBe('Scope,Unit,Group,Shifts,TOI,TOI (s),Avg shift,Avg (s),Longest,Longest (s),Shortest,Shortest (s),GF,GA,+/-');
+    expect(lines[0]).toBe('Scope,Unit,Group,Shifts,TOI,TOI (s),Avg shift,Avg (s),Longest,Longest (s),Shortest,Shortest (s),Avg rest,Avg rest (s),GF,GA,+/-');
     expect(lines).toHaveLength(1 + 9 * 4);
     const l1 = computeStats(demo.meta.units, demo.events).find((s) => s.unitId === 'L1')!;
     expect(lines[1].split(',').slice(0, 4)).toEqual(['Game', 'Line 1', 'F', String(l1.shifts)]);

@@ -40,12 +40,13 @@ export function summaryCsv(meta: GameMeta, events: readonly GameEvent[]): string
         period === undefined ? 'Game' : `P${period}`, u.name, u.group, s.shifts,
         formatClock(s.toiMs), secs(s.toiMs), formatMaybe(s.avgMs), secs(s.avgMs),
         formatMaybe(s.longestMs), secs(s.longestMs), formatMaybe(s.shortestMs), secs(s.shortestMs),
+        formatMaybe(s.avgRestMs), secs(s.avgRestMs),
         s.gf, s.ga, s.plusMinus,
       ];
     }),
   );
   return toCsv(
-    ['Scope', 'Unit', 'Group', 'Shifts', 'TOI', 'TOI (s)', 'Avg shift', 'Avg (s)', 'Longest', 'Longest (s)', 'Shortest', 'Shortest (s)', 'GF', 'GA', '+/-'],
+    ['Scope', 'Unit', 'Group', 'Shifts', 'TOI', 'TOI (s)', 'Avg shift', 'Avg (s)', 'Longest', 'Longest (s)', 'Shortest', 'Shortest (s)', 'Avg rest', 'Avg rest (s)', 'GF', 'GA', '+/-'],
     rows,
     [1],
   );

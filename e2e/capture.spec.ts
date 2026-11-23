@@ -88,3 +88,30 @@ test('taps fire once on pointerdown (no double toggle)', async ({ page }) => {
   await tile(page, 'L3').click();
   await expect(tile(page, 'L3')).toHaveAttribute('aria-pressed', 'false');
 });
+
+test('tiles show rest time; long shift turns red; long rest turns text red', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-21T19:00:00') });
+  await page.goto('./#/new');
+  await page.getByLabel('Opponent').fill('Hawks');
+  await page.getByRole('button', { name: 'Create game' }).click();
+  await page.getByRole('button', { name: 'Start P1' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Start P1' }).click();
+  await page.getByRole('button', { name: '▶ Resume' }).click();
+
+  await tile(page, 'L1').click();
+  await page.clock.fastForward('01:20');
+  await expect(tile(page, 'L1')).not.toHaveClass(/long-shift/);
+  await page.clock.fastForward('00:15'); // 1:35 > 1:30
+  await expect(tile(page, 'L1')).toHaveClass(/long-shift/);
+  await expect(tile(page, 'L1')).toHaveCSS('background-color', 'rgb(215, 38, 61)');
+
+  await tile(page, 'L2').click();
+  await page.clock.fastForward('02:00');
+  await expect(page.getByTestId('rest-L1')).toHaveText('off 2:00');
+  await expect(tile(page, 'L1')).not.toHaveClass(/long-rest/);
+  await page.clock.fastForward('03:05'); // off 5:05 > 5:00
+  await expect(page.getByTestId('rest-L1')).toHaveText('off 5:05');
+  await expect(tile(page, 'L1')).toHaveClass(/long-rest/);
+  await expect(tile(page, 'L1')).toHaveCSS('color', 'rgb(255, 107, 107)');
+  await expect(page.getByTestId('rest-L3')).toHaveText(''); // never on: no rest shown
+});

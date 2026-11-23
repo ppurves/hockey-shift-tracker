@@ -85,11 +85,11 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
   y = table(
     y,
     [
-      { label: 'Unit', w: 170, align: 'left' }, { label: 'Shifts', w: 60 }, { label: 'TOI', w: 70 }, { label: 'Avg shift', w: 75 },
-      { label: 'Longest', w: 70 }, { label: 'Shortest', w: 70 }, { label: 'GF', w: 45 }, { label: 'GA', w: 45 }, { label: '+/-', w: 50 },
+      { label: 'Unit', w: 160, align: 'left' }, { label: 'Shifts', w: 55 }, { label: 'TOI', w: 65 }, { label: 'Avg shift', w: 70 },
+      { label: 'Longest', w: 65 }, { label: 'Shortest', w: 70 }, { label: 'Avg rest', w: 70 }, { label: 'GF', w: 45 }, { label: 'GA', w: 45 }, { label: '+/-', w: 50 },
     ],
     stats.map((s) => [
-      name(s.unitId), String(s.shifts), formatClock(s.toiMs), fmt(s.avgMs), fmt(s.longestMs), fmt(s.shortestMs),
+      name(s.unitId), String(s.shifts), formatClock(s.toiMs), fmt(s.avgMs), fmt(s.longestMs), fmt(s.shortestMs), fmt(s.avgRestMs),
       String(s.gf), String(s.ga), s.plusMinus > 0 ? `+${s.plusMinus}` : String(s.plusMinus),
     ]),
   );

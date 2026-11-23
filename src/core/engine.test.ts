@@ -7,6 +7,7 @@ import {
   formatClock,
   formatMaybe,
   periodLengths,
+  restMsAt,
   type Command,
   type GameEvent,
   type UnitStats,
@@ -401,5 +402,47 @@ describe('sanity: per-group TOI vs game clock', () => {
     const sum = (ids: string[]) => ids.reduce((a, id) => a + statFor(st, id).toiMs, 0);
     expect(sum(['L1', 'L2', 'L3'])).toBe(len);
     expect(sum(['D1', 'D2'])).toBe(len);
+  });
+});
+
+describe('rest (time since last shift)', () => {
+  it('counts game-clock time since the shift ended, not paused time, and across periods', () => {
+    const g = startedGame();
+    run(g, tap('L1'));
+    advance(1 * MIN);
+    run(g, tap('L2')); // L1 off at 1:00
+    expect(restMsAt(g.state, 'L1', g.gameMs())).toBe(0);
+    advance(2 * MIN);
+    run(g, { type: 'pause' });
+    advance(10 * MIN); // paused: not counted
+    expect(restMsAt(g.state, 'L1', g.gameMs())).toBe(2 * MIN);
+    expect(restMsAt(g.state, 'L2', g.gameMs())).toBeNull(); // on ice
+    expect(restMsAt(g.state, 'L3', g.gameMs())).toBeNull(); // no shift yet
+    run(g, { type: 'resume' });
+    advance(1 * MIN); // P1 ends at 4:00; L2 off at 4:00
+    run(g, { type: 'startPeriod', period: 2 }, { type: 'resume' });
+    advance(30 * SEC);
+    expect(restMsAt(g.state, 'L1', g.gameMs())).toBe(3 * MIN + 30 * SEC);
+    expect(restMsAt(g.state, 'L2', g.gameMs())).toBe(30 * SEC);
+  });
+
+  it('average rest is the mean gap between consecutive shifts, spanning period breaks', () => {
+    const g = startedGame();
+    run(g, tap('L1'));
+    advance(1 * MIN);
+    run(g, tap('L2'));
+    advance(2 * MIN);
+    run(g, tap('L1')); // L1 rest 2:00
+    advance(1 * MIN);
+    run(g, tap('L2')); // L1 off at 4:00
+    advance(1 * MIN); // P1 ends 5:00
+    run(g, { type: 'startPeriod', period: 2 }, { type: 'resume' });
+    advance(2 * MIN);
+    run(g, tap('L1')); // rest 1:00 of P1 + 2:00 of P2 = 3:00
+    const game = statFor(computeStats(DEFAULT_UNITS, g.events, { liveGameMs: g.gameMs() }), 'L1');
+    expect(game.avgRestMs).toBe(2.5 * MIN);
+    const p2 = statFor(computeStats(DEFAULT_UNITS, g.events, { period: 2, liveGameMs: g.gameMs() }), 'L1');
+    expect(p2.avgRestMs).toBe(3 * MIN);
+    expect(statFor(computeStats(DEFAULT_UNITS, g.events), 'L3').avgRestMs).toBeNull();
   });
 });

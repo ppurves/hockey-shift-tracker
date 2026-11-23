@@ -85,7 +85,7 @@ export function Summary({ session }: { session: GameSession }) {
           <thead>
             <tr>
               <th scope="col">Unit</th><th scope="col">Shifts</th><th scope="col">TOI</th><th scope="col">Avg</th>
-              <th scope="col">Long</th><th scope="col">Short</th><th scope="col">GF</th><th scope="col">GA</th><th scope="col">+/-</th>
+              <th scope="col">Long</th><th scope="col">Short</th><th scope="col" title="Average time between shifts">Rest</th><th scope="col">GF</th><th scope="col">GA</th><th scope="col">+/-</th>
             </tr>
           </thead>
           <tbody>
@@ -97,6 +97,7 @@ export function Summary({ session }: { session: GameSession }) {
                 <td>{formatMaybe(st.avgMs)}</td>
                 <td>{formatMaybe(st.longestMs)}</td>
                 <td>{formatMaybe(st.shortestMs)}</td>
+                <td>{formatMaybe(st.avgRestMs)}</td>
                 <td>{st.gf}</td>
                 <td>{st.ga}</td>
                 <td className={st.plusMinus > 0 ? 'plus' : st.plusMinus < 0 ? 'minus' : ''}>{st.plusMinus > 0 ? `+${st.plusMinus}` : st.plusMinus}</td>
@@ -105,6 +106,8 @@ export function Summary({ session }: { session: GameSession }) {
           </tbody>
         </table>
       </div>
+
+      <p className="muted small">Rest = average game-clock time between shifts (pauses and intermissions don't count).</p>
 
       <h2>Goals</h2>
       {goals.length === 0 ? <p className="muted">None.</p> : (

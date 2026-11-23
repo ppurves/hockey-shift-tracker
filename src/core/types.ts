@@ -53,6 +53,8 @@ export interface UnitStats {
   avgMs: number | null;
   longestMs: number | null;
   shortestMs: number | null;
+  /** Average game-clock time between consecutive shifts (null with fewer than 2). */
+  avgRestMs: number | null;
   gf: number;
   ga: number;
   plusMinus: number;

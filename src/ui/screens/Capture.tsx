@@ -4,6 +4,9 @@ import {
   exclusionSet,
   formatClock,
   gameMsAt,
+  LONG_REST_MS,
+  LONG_SHIFT_MS,
+  restMsAt,
   type Command,
   type GameEvent,
   type UnitDef,
@@ -144,18 +147,24 @@ export function Capture({ session }: { session: GameSession }) {
             {row.units.map((u) => {
               const a = s.active[u.id];
               const ms = a ? gameMs - a.startMs : s.lastShiftMs[u.id] ?? 0;
+              // Rest and long-shift flags are for lines and D pairs only.
+              const evenStrength = u.group === 'F' || u.group === 'D';
+              const rest = evenStrength && !a && s.period !== null ? restMsAt(s, u.id, s.periodEnded ? s.accMs : gameMs) : null;
+              const longShift = evenStrength && !!a && ms > LONG_SHIFT_MS;
+              const longRest = rest !== null && rest > LONG_REST_MS;
+              const state = a ? '● ON ICE' : rest !== null ? `off ${formatClock(rest)}` : s.lastShiftMs[u.id] !== undefined ? 'last shift' : '';
               return (
                 <TapButton
                   key={u.id}
-                  className={`tile g-${u.group} ${a ? 'on' : ''}`}
+                  className={`tile g-${u.group} ${a ? 'on' : ''} ${longShift ? 'long-shift' : ''} ${longRest ? 'long-rest' : ''}`}
                   aria-pressed={!!a}
-                  aria-label={`${u.name}, ${a ? 'on ice' : 'off'}, ${formatClock(ms)}`}
+                  aria-label={`${u.name}, ${a ? 'on ice' : 'off'}, ${formatClock(ms)}${longShift ? ', long shift' : ''}${rest !== null ? `, off for ${formatClock(rest)}` : ''}`}
                   data-unit={u.id}
                   onTap={() => run({ type: 'tapUnit', unitId: u.id })}
                 >
                   <span className="tile-name">{u.name}</span>
                   <span className="tile-time">{formatClock(ms)}</span>
-                  <span className="tile-state">{a ? '● ON ICE' : s.lastShiftMs[u.id] !== undefined ? 'last shift' : ''}</span>
+                  <span className="tile-state" data-testid={`rest-${u.id}`}>{state}</span>
                 </TapButton>
               );
             })}

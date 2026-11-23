@@ -9,6 +9,8 @@
   --warn: #f0a030;
   --danger: #e5484d;
   --on: #ffd23f;           /* active tile fill: bright yellow, black text */
+  --long: #d7263d;         /* active tile fill after 1:30: red, white text */
+  --long-text: #ff6b6b;    /* inactive tile text after 5:00 off: red, readable on navy */
   --gf: #0072b2;           /* Okabe-Ito blue */
   --ga: #d55e00;           /* Okabe-Ito vermillion */
   --pen: #6b5b95;
