@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { generateDemoGame, isoDate, makeBackup, parseBackup, type Backup } from '../../core';
+import { formatClock, generateDemoGame, isoDate, makeBackup, MAX_THRESHOLD_MS, parseBackup, parseClock, type Backup } from '../../core';
 import { appendEvents, exportAll, importGames, putSettings } from '../../data/db';
 import { canShareFiles, downloadFile } from '../../export/deliver';
 import { ConfirmSheet } from '../components/ConfirmSheet';
@@ -80,6 +80,19 @@ export function SettingsScreen() {
             }}
           />
         </label>
+        <ThresholdInput
+          label="Long shift: tile turns red after (m:ss)"
+          testId="long-shift"
+          valueMs={settings.longShiftMs}
+          onSave={(longShiftMs) => void save({ longShiftMs })}
+        />
+        <ThresholdInput
+          label="Long rest: tile text turns red after (m:ss)"
+          testId="long-rest"
+          valueMs={settings.longRestMs}
+          onSave={(longRestMs) => void save({ longRestMs })}
+        />
+        <p className="muted small">Both apply to lines and D pairs only, and use game-clock time.</p>
         <label className="toggle">
           <input type="checkbox" checked={settings.audioTick} onChange={(e) => void save({ audioTick: e.target.checked })} />
           <span>Audio tick on taps <small className="muted">(off by default; the silent switch mutes it)</small></span>
@@ -109,5 +122,28 @@ export function SettingsScreen() {
         />
       )}
     </main>
+  );
+}
+
+/** m:ss input that saves on blur; an invalid entry reverts to the saved value. */
+function ThresholdInput({ label, testId, valueMs, onSave }: { label: string; testId: string; valueMs: number; onSave: (ms: number) => void }) {
+  return (
+    <label>{label}
+      <input
+        key={valueMs}
+        type="text" autoComplete="off" placeholder="1:30"
+        data-testid={testId}
+        defaultValue={formatClock(valueMs)}
+        onBlur={(e) => {
+          const ms = parseClock(e.target.value);
+          if (ms !== null && ms > 0 && ms <= MAX_THRESHOLD_MS) {
+            e.target.value = formatClock(ms);
+            if (ms !== valueMs) onSave(ms);
+          } else {
+            e.target.value = formatClock(valueMs);
+          }
+        }}
+      />
+    </label>
   );
 }

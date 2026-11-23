@@ -81,5 +81,8 @@ describe('backup', () => {
   it('normalizes partial settings', () => {
     expect(normalizeSettings({ audioTick: true })).toMatchObject({ audioTick: true, recipientEmail: '', defaultPeriodLengthMs: 900_000 });
     expect(normalizeSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(normalizeSettings({})).toMatchObject({ longShiftMs: 90_000, longRestMs: 300_000 });
+    expect(normalizeSettings({ longShiftMs: 75_000, longRestMs: 240_000 })).toMatchObject({ longShiftMs: 75_000, longRestMs: 240_000 });
+    expect(normalizeSettings({ longShiftMs: 0, longRestMs: 'x' })).toMatchObject({ longShiftMs: 90_000, longRestMs: 300_000 });
   });
 });

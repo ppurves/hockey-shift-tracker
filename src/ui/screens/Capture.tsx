@@ -4,8 +4,6 @@ import {
   exclusionSet,
   formatClock,
   gameMsAt,
-  LONG_REST_MS,
-  LONG_SHIFT_MS,
   restMsAt,
   type Command,
   type GameEvent,
@@ -150,8 +148,8 @@ export function Capture({ session }: { session: GameSession }) {
               // Rest and long-shift flags are for lines and D pairs only.
               const evenStrength = u.group === 'F' || u.group === 'D';
               const rest = evenStrength && !a && s.period !== null ? restMsAt(s, u.id, s.periodEnded ? s.accMs : gameMs) : null;
-              const longShift = evenStrength && !!a && ms > LONG_SHIFT_MS;
-              const longRest = rest !== null && rest > LONG_REST_MS;
+              const longShift = evenStrength && !!a && ms > settings.longShiftMs;
+              const longRest = rest !== null && rest > settings.longRestMs;
               const state = a ? '● ON ICE' : rest !== null ? `off ${formatClock(rest)}` : s.lastShiftMs[u.id] !== undefined ? 'last shift' : '';
               return (
                 <TapButton

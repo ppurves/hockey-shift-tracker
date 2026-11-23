@@ -86,6 +86,7 @@ Stored in the IndexedDB `settings` store:
 - `recipientEmail`
 - `defaultPeriodLengthMs`
 - `audioTick` (Web Audio click, off by default; the iPhone's silent switch mutes it)
+- `longShiftMs` / `longRestMs` (m:ss inputs; plain seconds also accepted; invalid input reverts; max 60:00)
 - `defaultUnits` (rename; add or remove units per group with `nextUnit`; minimum one F and one D)
 
 New Game copies the default units, and they can be renamed for that game only. On Capture, more than 4 PP+PK units split into a PP row and a PK row.
@@ -112,7 +113,7 @@ Units are data (array), groups: **F** (Line 1–3), **D** (D 1–2), **PP** (PP 
 - F, D, and special teams run independently and concurrently. PP/PK never auto-clear F/D lines (v1).
 - Tap inactive unit → on (closes the other active unit in its exclusion set at the same timestamp). Tap active → off.
 - Active tiles: strong fill + running timer. Inactive tiles show last shift length.
-- Line/D tiles only (not PP/PK): inactive tiles show "off m:ss", the game-clock rest since the last shift (`restMsAt`; counts across periods, never paused time or intermissions). An active shift over 1:30 (`LONG_SHIFT_MS`) turns the tile red instead of yellow. Rest over 5:00 (`LONG_REST_MS`) turns the tile text red.
+- Line/D tiles only (not PP/PK): inactive tiles show "off m:ss", the game-clock rest since the last shift (`restMsAt`; counts across periods, never paused time or intermissions). An active shift over `settings.longShiftMs` (default 1:30, `LONG_SHIFT_MS`) turns the tile red instead of yellow. Rest over `settings.longRestMs` (default 5:00, `LONG_REST_MS`) turns the tile text red.
 - Stats include `avgRestMs`: the mean gap between consecutive shifts. A gap belongs to the period in which the next shift starts. Shown as "Rest" on the summary, "Avg rest" in the PDF and summary.csv.
 
 Clocks:

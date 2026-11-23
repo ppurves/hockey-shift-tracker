@@ -115,3 +115,29 @@ test('tiles show rest time; long shift turns red; long rest turns text red', asy
   await expect(tile(page, 'L1')).toHaveCSS('color', 'rgb(255, 107, 107)');
   await expect(page.getByTestId('rest-L3')).toHaveText(''); // never on: no rest shown
 });
+
+test('long shift / long rest thresholds come from Settings', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-21T19:00:00') });
+  await page.goto('./#/settings');
+  await page.getByTestId('long-shift').fill('0:45');
+  await page.getByTestId('long-rest').fill('nonsense');
+  await page.getByTestId('long-shift').focus(); // blur long-rest: invalid reverts
+  await expect(page.getByTestId('long-rest')).toHaveValue('5:00');
+  await page.getByTestId('long-rest').fill('90'); // plain seconds → 1:30
+  await page.getByTestId('long-shift').focus();
+  await expect(page.getByTestId('long-rest')).toHaveValue('1:30');
+  await expect(page.getByTestId('long-shift')).toHaveValue('0:45');
+
+  await page.goto('./#/new');
+  await page.getByLabel('Opponent').fill('Hawks');
+  await page.getByRole('button', { name: 'Create game' }).click();
+  await page.getByRole('button', { name: 'Start P1' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Start P1' }).click();
+  await page.getByRole('button', { name: '▶ Resume' }).click();
+  await tile(page, 'L1').click();
+  await page.clock.fastForward('00:50');
+  await expect(tile(page, 'L1')).toHaveClass(/long-shift/);
+  await tile(page, 'L2').click();
+  await page.clock.fastForward('01:35');
+  await expect(tile(page, 'L1')).toHaveClass(/long-rest/);
+});

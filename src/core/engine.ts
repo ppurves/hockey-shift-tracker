@@ -106,9 +106,9 @@ function closeActive(s: GameState, gameMs: number): Record<string, number> {
   return out;
 }
 
-/** Shifts longer than this are flagged on the capture screen. */
+/** Default: shifts longer than this are flagged on the capture screen (editable in Settings). */
 export const LONG_SHIFT_MS = 90_000;
-/** Rest (time since last shift) longer than this is flagged on the capture screen. */
+/** Default: rest (time since last shift) longer than this is flagged (editable in Settings). */
 export const LONG_REST_MS = 300_000;
 
 /**
