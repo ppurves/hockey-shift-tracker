@@ -25,7 +25,10 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 
 ## Engine API (src/core)
 - `types.ts`: `UnitDef`, `GameEvent` (each has `seq`, `txn`, `period`, `gameMs`, `wallTs`), `Shift`, `UnitStats`.
-- `units.ts`: `DEFAULT_UNITS`, `exclusionSet(group)`, which returns F / D / ST (PP and PK share ST).
+- `units.ts`:
+  - `DEFAULT_UNITS` holds the F lines and D pairs only. `LEGACY_UNITS` adds PP/PK units, as games made before M7 have them; tests use it.
+  - `exclusionSet(group)` returns F / D / G / ST, with PP and PK sharing ST.
+  - `exclusionKey(unit)`: each roster player gets a key of their own, and all goalies share `G`, so only one is in net.
 - `engine.ts`:
   - `reduce`/`replay` is the pure reducer.
   - `gameMsAt(state, now)` gives the live clock.
@@ -39,9 +42,16 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
   - `periodLengths` returns how long each period ran.
 - `format.ts`: `formatClock` (m:ss) and `formatMaybe` (null → "—").
 - `timeline.ts`: `timelineSvg({units, events, period | 'all', periodLengthMs, liveGameMs?, width?, theme?})` returns a standalone SVG string with inline colours. The summary screen and the PDF both use it.
-  - Bars: F `#56b4e9`, D `#009e73`, PP `#e69f00`, PK `#cc79a7`.
+  - Bars: F `#56b4e9`, D `#009e73`, goalie `#9aa5b1`, plus legacy PP `#e69f00` and PK `#cc79a7` units.
+  - When there are timed penalties, a "PP / PK" **game condition lane** appears under the goal lane: PP `#e69f00`, PK `#cc79a7`, 4-on-4 hatched grey. PK bars carry the boxed player's `#number`.
+  - Penalty box time is drawn in the penalized player's row, hatched red (pattern `#hst-box`).
+  - The legend wraps to the width.
   - Goals: ▲ for `#0072b2`, ▼ against `#d55e00`, with a white outline. Penalties are flags: filled for "for", hollow for "against".
-- `demo.ts`: `generateDemoGame({id, startWall, seed?})` drives the real engine with a fake clock. It's deterministic. Demo convention only: "penalty for" means we go on the PP. The app itself never interprets penalties.
+- `demo.ts`: `generateDemoGame({id, startWall, seed?, units?, players?})` drives the real engine with a fake clock. It's deterministic. Passing `players: DEMO_ROSTER` gives a roster game, with goalies and a forward sent to the box on each penalty against.
+- `penalties.ts`:
+  - `derivePenalties(events, liveGameMs?)` returns each penalty with its side, player, length, end (expired / goal / manual / open) and the time served split per period.
+  - `conditionSegments` and `conditionTotals` give the PP / PK / EVEN stretches.
+  - `penaltyPlayer` and `penaltyEndText` give the labels, in ASCII so the PDF can use them.
 - `stats.ts` `toiCheck`: per period, F TOI and D TOI vs the game clock. It's shown on the summary.
 - Goal events store an `onIce` snapshot and a `strength`. Stats credit GF/GA from that snapshot. A post-game edit that changes shifts must recompute the snapshot.
 - `purity.test.ts` fails if src/core imports React/idb or uses DOM globals, `setInterval`/`setTimeout`, or `Date.now`.
@@ -58,7 +68,7 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 ## Export, email, backup (src/export, core/csv.ts, core/backup.ts)
 - Files are named `YYYY-MM-DD_vs_Opponent_{report.pdf,summary.csv,shifts.csv,events.csv}` (`fileBase`).
 - CSVs have a UTF-8 BOM and CRLF line endings. Times are given as m:ss plus a seconds column. Text cells starting with `= + - @` get a `'` prefix to block formula injection.
-- `buildPdf` (jsPDF, Letter landscape, 2 pages, `compress: true`):
+- `buildPdf` (jsPDF, Letter landscape, 2+ pages, `compress: true`). Page 1 also lists penalties, with power-play and penalty-kill totals:
   - Page 1: header, stats table, goals.
   - Page 2: full-game timeline (light-theme SVG → canvas → **JPEG**) and TOI by period.
   - It uses ASCII text only, because Helvetica has no glyphs for — ▲ ▼. The demo PDF is about 180 KB.
@@ -79,19 +89,22 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
   - `seq` is renumbered.
   - Every goal's `onIce` and `strength` are recomputed by replaying the log. An unedited log comes out identical, which is tested.
 - Validation: the end must be after the start, times must be within the period, and shifts can't overlap within an exclusion set (F, D, or PP+PK). Added events get `wallTs: 0`.
+- An added penalty gets the default length and runs to expiry. `deleteMarker` on a penalty also removes its `penaltyInfo` and `penaltyEnd` events.
 - Saving goes through `session.replaceLog` → `replaceEvents`, which writes the events and the game score in one transaction.
 
 ## Roster mode (core/roster.ts, components/RosterEditor.tsx)
 - `GameMeta.mode` is `'lines'` (the default, and what older games have) or `'roster'`. A roster game also has `players: Player[]`, where each player is `{id, number, name, position F|D|G, lineId | null}`. Ids are `p1`, `p2`, and so on (`nextPlayerId`). `lineId` points to an F line or a D pair in `meta.units`, and `null` means an extra.
-- Players are tracked as units: `trackedUnits(meta)` returns the player `UnitDef`s (`kind: 'player'`, group F/D, `lineId`, `number`) followed by the PP/PK units. Goalies are listed on the roster but not tracked. The engine, `deriveShifts`, `computeStats`, the timeline and the edit functions all receive `trackedUnits` (`engine.units`), **not** `meta.units`.
+- Players are tracked as units: `trackedUnits(meta)` returns the player `UnitDef`s (`kind: 'player'`, group F/D/G, `lineId`, `number`) followed by any legacy PP/PK units.
+- Goalies (group G) are exclusive, so one is in net at a time. Their tiles show "IN NET" and no timers. At each period start, the goalie who was in net (or the last one) is put back in net, in the periodStart txn.
+- Capture player tiles and the penalty sheet show **numbers only**; reports show "#9 Avery". The engine, `deriveShifts`, `computeStats`, the timeline and the edit functions all receive `trackedUnits` (`engine.units`), **not** `meta.units`.
 - `exclusionKey(unit)`: each player gets a key of their own, so any number of players can be on at once. Lines and units still use `exclusionSet`.
 - `tapLine {lineId}`: if every player on the line is already on, it takes them all off. Otherwise it takes every other player in that group off (extras included) and puts on the line's players who are off. All of it is one txn, and Undo shows "Line 2 on".
 - Lines are derived and never stored: a line is "on" while `lineThreshold(n) = floor(n/2)+1` of its players are on. `withLineEvents` adds synthetic unitOn/unitOff events for each line, and adds the lines that were on to each goal's `onIce`. If a line goes off and back on at the same game time, it keeps one shift.
-- `reportView(meta, events)` gives the rows (each line, then its players, then extras, then PP/PK) and the augmented events. `statRows` gives `{kind: line|player|unit, unit, stats}`. The Summary, CSV, text summary, PDF and timeline all use these. Name any id with `unitNamer(meta)`.
+- `reportView(meta, events)` gives the rows (each line, then its players, then extras, then goalies) and the augmented events. `statRows` gives `{kind: line|player|unit, unit, stats}`. The Summary, CSV, text summary, PDF and timeline all use these. Name any id with `unitNamer(meta)`.
 - Capture in roster mode: each line gets a row with the line tile first, then that line's players. Extras get their own row, then special teams. Everything sits on one shared column grid (`--cols`).
 - In roster mode the TOI check shows average skaters on the ice (F TOI ÷ clock ≈ 3, D ≈ 2).
 - CSVs: roster games add `Type, Number, Line` columns to summary.csv and `Number, Line` to shifts.csv. The PDF table runs onto extra pages as needed, so a roster PDF has 3 or more pages.
-- Settings has `defaultMode` and `defaultRoster`, and New Game copies both. The roster can only be edited per game at creation time, not during a live game. Backup is version 2, and version 1 files still restore.
+- Settings has `defaultMode` and `defaultRoster`, and New Game copies both. The roster can only be edited per game at creation time, not during a live game. Backup is version 3 (version 3 added `penaltyInfo`/`penaltyEnd`), and older files still restore.
 
 ## Settings
 Stored in the IndexedDB `settings` store:
@@ -101,7 +114,9 @@ Stored in the IndexedDB `settings` store:
 - `longShiftMs` / `longRestMs` (m:ss inputs; plain seconds also accepted; invalid input reverts; max 60:00)
 - `defaultUnits` (rename; add or remove units per group with `nextUnit`; minimum one F and one D)
 
-New Game copies the default units, and they can be renamed for that game only. On Capture, more than 4 PP+PK units split into a PP row and a PK row.
+- `defaultPenaltyMs` (default 2:00, `DEFAULT_PENALTY_MS`)
+
+New Game copies the default units, and they can be renamed for that game only. `normalizeSettings` drops PP/PK units saved by older versions, and the UnitsEditor only edits F and D. Legacy games with PP/PK units still show ST tiles, and more than 4 of them split into a PP row and a PK row.
 
 ## Accessibility
 - Dynamic Type via `font: -apple-system-body`. Capture-screen text is capped with `min(rem, vw)` so tiles never overflow.
@@ -120,12 +135,11 @@ Push to main → Pages deploys in ~2 min. The app checks for a new service worke
 - No haptics on iOS: instant visual press state + optional audio tick (setting, off by default).
 
 ## Domain rules (must be exactly right)
-Units are data (array), groups: **F** (Line 1–3), **D** (D 1–2), **PP** (PP 1–2), **PK** (PK 1–2). Roster mode tracks individual players instead of F/D units (see "Roster mode").
-- Max one active unit per group. **PP and PK are mutually exclusive**: tapping a PK while a PP is on closes the PP first, and the reverse also applies (one "special teams" exclusion set).
-- F, D, and special teams run independently and concurrently. PP/PK never auto-clear F/D lines (v1).
+Units are data (array), groups: **F** (Line 1–3), **D** (D 1–2). Roster mode tracks individual players (and goalies) instead (see "Roster mode"). Since M7, **power play and penalty kill are game conditions, not units** (see "Penalties"). PP/PK units survive only in games from before M7: there, PP and PK share one exclusion set.
+- Max one active unit per group. F and D run independently and concurrently.
 - Tap inactive unit → on (closes the other active unit in its exclusion set at the same timestamp). Tap active → off.
 - Active tiles: strong fill + running timer. Inactive tiles show last shift length.
-- Line/D tiles only (not PP/PK): inactive tiles show "off m:ss", the game-clock rest since the last shift (`restMsAt`; counts across periods, never paused time or intermissions). An active shift over `settings.longShiftMs` (default 1:30, `LONG_SHIFT_MS`) turns the tile red instead of yellow. Rest over `settings.longRestMs` (default 5:00, `LONG_REST_MS`) turns the tile text red.
+- Line/D/skater tiles only (not goalies or PP/PK): inactive tiles show "off m:ss", the game-clock rest since the last shift (`restMsAt`; counts across periods, never paused time or intermissions). An active shift over `settings.longShiftMs` (default 1:30, `LONG_SHIFT_MS`) turns the tile red instead of yellow. Rest over `settings.longRestMs` (default 5:00, `LONG_REST_MS`) turns the tile text red.
 - Stats include `avgRestMs`: the mean gap between consecutive shifts. A gap belongs to the period in which the next shift starts. Shown as "Rest" on the summary, "Avg rest" in the PDF and summary.csv.
 
 Clocks:
@@ -137,9 +151,19 @@ Clocks:
 - **Never** time with setInterval counters. Game clock = `accumulatedMs + (running ? now() - runningSince : 0)` using wall-clock `Date.now()`. Display refresh (rAF) is cosmetic. After kill/relaunch, replay the log; elapsed wall time since the last event counts only if the clock was running.
 
 Events and stats:
-- Append-only event log is the source of truth: periodStart, periodEnd, pause, resume, unitOn, unitOff, goalFor, goalAgainst, penaltyFor, penaltyAgainst. Each has period, gameMs, wallTs. Shifts and stats are pure derivations from it (Undo = drop last event(s)).
-- Goals snapshot on-ice units; each gets GF/GA → +/-. Goal strength EV/PP/PK from the active PP/PK unit.
-- Penalties: count + timeline marker only; never auto-start PP/PK.
+- Append-only event log is the source of truth: periodStart, periodEnd, pause, resume, unitOn, unitOff, goalFor, goalAgainst, penaltyFor, penaltyAgainst, penaltyInfo, penaltyEnd. Each has period, gameMs, wallTs. Shifts and stats are pure derivations from it (Undo = drop last event(s)).
+- Goals snapshot on-ice units; each gets GF/GA → +/-. Goal strength comes from the game condition: more opponent penalties running = PP, more of ours = PK, otherwise EV (including 4-on-4). A legacy PP/PK unit on the ice overrides that.
+
+Penalties (M7, `engine.ts` + `penalties.ts`):
+- A penalty is timed when it has `lengthMs`; Capture passes `settings.defaultPenaltyMs`. **Penalty for** starts a power play and **penalty against** starts a penalty kill. Its id is the txn of the penalty event (`ref`). Penalties logged before M7 have no length and remain markers only.
+- Time runs on the game clock across periods (`startAbs` = `priorPeriodsMs + gameMs`). It never runs during pauses or intermissions, and it carries over into the next period.
+- A penalty ends in one of three ways:
+  - **Time runs out.** `planSettle` writes `penaltyEnd {reason: 'expired'}` at the exact expiry game time, as an `auto: true` txn. `GameEngine.dispatch` settles before every command, and Capture/Summary call `session.settle()` on each render.
+  - **A goal by the team with more skaters** ends the earliest-expiring penalty of the short-handed side (minor rule), in the goal's txn. A goal at 4-on-4 ends nothing.
+  - **Manually**, via `endPenalty` from the PP/PK strip.
+- Penalty against: the sheet asks for the player (roster: number buttons, goalies excluded; lines mode: a typed number) and the length, both optional. The choice is a `penaltyInfo {ref, playerId?, number?, lengthMs?}` event in its own txn. The penalized player is taken off the ice. `tapUnit` refuses them, and `tapLine` skips them, until the penalty ends. Their tile is disabled and shows the box countdown.
+- `undoLast` skips trailing `auto` events and removes the last user txn along with them. Expiries that are still due are written again on the next settle.
+- Penalties never change which lines are on the ice; only the boxed player comes off.
 - **Goals and penalties auto-pause the clock** (play stops). The goal/penalty event and the `pause` share one txn, so Undo reverts both and the clock runs as if nothing happened. If the clock is already paused, no extra pause is added.
 - Per-unit stats (overall + per period): shifts, TOI, avg, longest, shortest, GF, GA, +/-. Averages show "—" with 0 shifts.
 - Sanity check: per group, sum of TOI ≤ game clock (equal if a unit of that group was always on). Do not sum across groups.
