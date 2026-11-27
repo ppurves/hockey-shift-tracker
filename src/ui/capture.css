@@ -26,6 +26,12 @@
 .strip.warn { background: #5a3c00; color: #ffd9a0; font-weight: 600; font-size: 0.85rem; }
 .strip.paused { background: var(--warn); color: #000; font-size: 1.1rem; letter-spacing: .04em; }
 .strip.info { background: #1d3a57; }
+/* Game condition: PP (orange) / PK (pink) countdowns; tap for options. */
+.cond-strips { display: flex; gap: 4px; }
+.strip.cond { flex: 1; border: 0; color: #000; font-size: 1.05rem; font-weight: 900; font-variant-numeric: tabular-nums; min-height: 44px; }
+.strip.cond small { font-size: .8rem; font-weight: 700; }
+.strip.cond.pp { background: #e69f00; }
+.strip.cond.pk { background: #cc79a7; }
 
 .cap-units { grid-area: units; display: grid; grid-auto-rows: 1fr; gap: 8px; min-height: 0; }
 .unit-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; min-height: 0; }
@@ -51,9 +57,14 @@
 .tile.line-tile.partial { border-style: dashed; border-color: var(--on); }
 .tile.player { min-height: 60px; padding: 2px; gap: 0; }
 .tile.player .tile-name { font-size: min(1.25rem, 5vw, 4.4vh); }
-.tile-pname { font-size: min(0.68rem, 2.8vw); font-weight: 700; opacity: .8; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-units.roster .tile-time { font-size: min(1.2rem, 4.8vw, 3.8vh); }
 .cap-units.roster .tile-state { font-size: min(0.62rem, 2.6vw); }
+/* Goalies: in net or not, no timers. */
+.tile.g-G { border-color: #8a96a3; }
+.tile.g-G .tile-name { font-size: min(1.25rem, 5vw, 4.4vh); }
+/* Penalized player: can't be selected until the penalty ends. */
+.tile.in-box { background: repeating-linear-gradient(-45deg, #4a1a1a 0 8px, #2a1010 8px 16px); border: 3px dashed #e0565b; color: #ffb3b3; cursor: not-allowed; }
+.tile.in-box .tile-time, .tile.in-box .tile-state { opacity: 1; }
 /* Shift over 1:30: red instead of yellow. */
 .tile.on.long-shift { background: var(--long); color: #fff; }
 /* Off over 5:00: red text. */

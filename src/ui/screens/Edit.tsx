@@ -13,7 +13,11 @@ import {
   type GameEvent,
   type Shift,
   unitNamer,
+  derivePenalties,
+  penaltyPlayer,
+  penaltyEndText,
 } from '../../core';
+import { useSettings } from '../hooks/useSettings';
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { navigate } from '../hooks/useHashRoute';
 import type { GameSession } from '../hooks/useGameSession';
@@ -46,6 +50,8 @@ export function Edit({ session }: { session: GameSession }) {
   const [newShift, setNewShift] = useState({ unitId: units[0]?.id ?? '', start: '', end: '' });
   const [newMarker, setNewMarker] = useState<{ type: Marker; time: string }>({ type: 'goalFor', time: '' });
   const name = unitNamer(meta);
+  const { settings } = useSettings();
+  const penaltyInfo = new Map(derivePenalties(events).map((p) => [p.ref, p]));
 
   if (meta.status !== 'final') {
     return (
@@ -96,6 +102,12 @@ export function Edit({ session }: { session: GameSession }) {
             <span>
               <strong>{MARKER_LABEL[e.type as Marker]}</strong> {formatClock(e.gameMs)}
               {'onIce' in e && <span className="muted small"> · {e.strength} · {e.onIce.map(name).join(', ') || 'no units'}</span>}
+              {(() => {
+                const p = penaltyInfo.get(e.txn);
+                if (!p || !(e.type === 'penaltyFor' || e.type === 'penaltyAgainst')) return null;
+                const who = penaltyPlayer(p, name);
+                return <span className="muted small">{who && ` · ${who}`}{p.lengthMs !== null && ` · ${formatClock(p.lengthMs)}, ${penaltyEndText(p)}`}</span>;
+              })()}
             </span>
             <button className="small-btn danger" aria-label={`Delete ${MARKER_LABEL[e.type as Marker]} at ${formatClock(e.gameMs)}`}
               onClick={() => setConfirm({ title: `Delete ${MARKER_LABEL[e.type as Marker]} at ${formatClock(e.gameMs)}?`, run: () => deleteMarker(units, events, e.seq) })}>
@@ -112,7 +124,7 @@ export function Edit({ session }: { session: GameSession }) {
         <button className="small-btn primary" onClick={async () => {
           const t = parseClock(newMarker.time);
           if (t === null) { setMsg({ text: 'Enter the time as m:ss, e.g. 3:05.', tone: 'error' }); return; }
-          if (await apply(addMarker(units, events, newMarker.type, period, t), `Added ${MARKER_LABEL[newMarker.type]} at ${formatClock(t)}.`)) {
+          if (await apply(addMarker(units, events, newMarker.type, period, t, newMarker.type.startsWith('penalty') ? settings.defaultPenaltyMs : undefined), `Added ${MARKER_LABEL[newMarker.type]} at ${formatClock(t)}.`)) {
             setNewMarker({ ...newMarker, time: '' });
           }
         }}>Add</button>

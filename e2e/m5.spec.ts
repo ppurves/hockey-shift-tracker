@@ -42,7 +42,7 @@ test('settings: default units and period length flow into a new game', async ({ 
 
   await page.goto('./#/new');
   await expect(page.getByLabel('Period length (minutes)')).toHaveValue('12');
-  await page.getByRole('button', { name: /Unit names for this game \(10 units\)/ }).click();
+  await page.getByRole('button', { name: /Unit names for this game \(6 units\)/ }).click();
   await page.getByLabel('Name for L2').fill('Kids Line');
   await page.getByRole('button', { name: 'Create game' }).click();
 

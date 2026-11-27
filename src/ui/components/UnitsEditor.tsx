@@ -1,8 +1,10 @@
-import { defaultUnitName, nextUnit, sortUnits, type Group, type UnitDef } from '../../core';
+import { defaultUnitName, nextUnit, sortUnits, type UnitDef } from '../../core';
 
-const GROUP_LABEL: Record<Group, string> = { F: 'Forward lines', D: 'Defense pairs', PP: 'Power play', PK: 'Penalty kill' };
-const MIN: Record<Group, number> = { F: 1, D: 1, PP: 0, PK: 0 };
-const MAX: Record<Group, number> = { F: 5, D: 4, PP: 3, PK: 3 };
+// Power plays and penalty kills are game conditions (from penalties), not units.
+type EditGroup = 'F' | 'D';
+const GROUP_LABEL: Record<EditGroup, string> = { F: 'Forward lines', D: 'Defense pairs' };
+const MIN: Record<EditGroup, number> = { F: 1, D: 1 };
+const MAX: Record<EditGroup, number> = { F: 5, D: 4 };
 
 /** Rename units, and (optionally) add or remove units per group. */
 export function UnitsEditor(props: { units: UnitDef[]; onChange: (u: UnitDef[]) => void; allowAddRemove?: boolean }) {
@@ -10,7 +12,7 @@ export function UnitsEditor(props: { units: UnitDef[]; onChange: (u: UnitDef[]) 
   const rename = (id: string, name: string) => onChange(units.map((u) => (u.id === id ? { ...u, name } : u)));
   return (
     <div className="units-editor">
-      {(['F', 'D', 'PP', 'PK'] as Group[]).map((g) => {
+      {(['F', 'D'] as EditGroup[]).map((g) => {
         const list = units.filter((u) => u.group === g);
         return (
           <fieldset key={g}>

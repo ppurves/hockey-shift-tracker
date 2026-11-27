@@ -7,6 +7,8 @@ export interface GameSession {
   engine: GameEngine;
   dispatch: (cmd: Command) => CommandResult;
   undo: () => GameEvent[];
+  /** Ends penalties whose time ran out (call on each display tick). Returns the new events. */
+  settle: () => GameEvent[];
   updateMeta: (patch: Partial<GameMeta>) => Promise<void>;
   /** Replaces the whole log (post-game edits) and saves it. */
   replaceLog: (events: GameEvent[]) => Promise<void>;
@@ -51,11 +53,22 @@ export function useGameSession(gameId: string): GameSession | 'loading' | 'missi
   const dispatch = useCallback((cmd: Command): CommandResult => {
     if (!engine) return { ok: false, reason: 'Game not loaded' };
     const r = engine.dispatch(cmd);
-    if (r.ok) {
+    // A refused command can still have settled expired penalties first: save those too.
+    if (r.events?.length) {
       rerender();
       appendEvents(syncMeta(), r.events).then(() => setSaveError(null), onSaveFail);
     }
     return r;
+  }, [engine, syncMeta]);
+
+  const settle = useCallback((): GameEvent[] => {
+    if (!engine) return [];
+    const ev = engine.settle();
+    if (ev.length) {
+      rerender();
+      appendEvents(syncMeta(), ev).then(() => setSaveError(null), onSaveFail);
+    }
+    return ev;
   }, [engine, syncMeta]);
 
   const undo = useCallback((): GameEvent[] => {
@@ -85,5 +98,5 @@ export function useGameSession(gameId: string): GameSession | 'loading' | 'missi
   }, []);
 
   if (typeof loaded !== 'object') return loaded;
-  return { meta: metaRef.current!, engine: loaded.engine, dispatch, undo, updateMeta, replaceLog, saveError };
+  return { meta: metaRef.current!, engine: loaded.engine, dispatch, undo, settle, updateMeta, replaceLog, saveError };
 }

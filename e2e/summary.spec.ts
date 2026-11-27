@@ -16,7 +16,7 @@ test('demo game: summary, timeline tabs and TOI check', async ({ page }) => {
   expect(p2).toBeLessThan(all);
 
   await expect(page.locator('.timeline-scroll .goal')).not.toHaveCount(0);
-  await expect(page.getByTestId('stats-table').locator('tbody tr')).toHaveCount(9);
+  await expect(page.getByTestId('stats-table').locator('tbody tr')).toHaveCount(5);
   await page.getByRole('tab', { name: 'All' }).click();
   // Sanity: forward and D TOI equal the clock in every period.
   await expect(page.getByTestId('toi-check').locator('td:has-text("✓")')).toHaveCount(6);

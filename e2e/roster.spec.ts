@@ -51,6 +51,7 @@ test('roster: build a roster, track by line and by player, summary by line', asy
 
   await page.getByRole('button', { name: /Goal\s*For/ }).click();
   await expect(page.getByText(/Goal for \(EV\) · #9 Avery, #17 Brooks, #2 Kerr, #4 Lowe, #28 Jones/)).toBeVisible();
+  await expect(player(page, 'p1')).not.toContainText('Avery'); // tiles: numbers only
   await page.getByRole('button', { name: '▶ Resume' }).click();
   await page.clock.fastForward('00:30');
 
@@ -93,14 +94,15 @@ test('roster capture screen fits a phone without scrolling', async ({ page }) =>
   // 3 lines × 3 F + 1 extra, 2 pairs × 2 D: a full bench.
   for (let i = 0; i < 10; i++) await page.getByRole('button', { name: '+ Forward' }).click();
   for (let i = 0; i < 4; i++) await page.getByRole('button', { name: '+ Defense' }).click();
+  for (let i = 0; i < 2; i++) await page.getByRole('button', { name: '+ Goalie' }).click();
   const rows = page.locator('.roster-row');
-  for (let i = 0; i < 14; i++) await rows.nth(i).getByLabel(/Number/).fill(String(i + 2));
+  for (let i = 0; i < 16; i++) await rows.nth(i).getByLabel(/Number/).fill(String(i + 2));
   await page.goto('./#/new');
   await page.getByRole('button', { name: 'Create game' }).click();
   await page.getByRole('button', { name: 'Start P1' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Start P1' }).click();
   const tiles = page.locator('.cap-units .tile');
-  await expect(tiles).toHaveCount(5 + 14 + 4);
+  await expect(tiles).toHaveCount(5 + 14 + 2); // line tiles, skaters, goalies (no PP/PK tiles)
   for (const t of await tiles.all()) {
     const b = (await t.boundingBox())!;
     expect(b.height).toBeGreaterThanOrEqual(56);
@@ -108,5 +110,8 @@ test('roster capture screen fits a phone without scrolling', async ({ page }) =>
   }
   const footer = (await page.locator('.cap-footer').boundingBox())!;
   expect(footer.y + footer.height).toBeLessThanOrEqual(844);
+  // Player tiles show numbers only; goalies show no timer.
+  await expect(page.locator('.tile.player').first()).toHaveText(/^#\d+0:00/);
+  await expect(page.locator('.tile.g-G').first()).not.toContainText(':');
   await page.screenshot({ path: 'test-results/roster-capture.png' });
 });

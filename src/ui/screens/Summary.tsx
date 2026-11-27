@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  conditionTotals,
+  derivePenalties,
   formatClock,
+  penaltyEndText,
+  penaltyPlayer,
   formatMaybe,
   gameMsAt,
   isRoster,
@@ -52,6 +56,10 @@ export function Summary({ session }: { session: GameSession }) {
   const checks = toiCheck(engine.units, events, liveGameMs).filter((r) => tab === 'all' || r.period === tab);
   const goals = events.filter((e) => (e.type === 'goalFor' || e.type === 'goalAgainst') && (tab === 'all' || e.period === tab));
   const name = unitNamer(meta);
+  // While live, end any penalty whose time ran out (as the capture screen does).
+  useEffect(() => { if (live) session.settle(); });
+  const penalties = derivePenalties(events, liveGameMs).filter((p) => tab === 'all' || p.period === tab || p.pieces.some((x) => x.period === tab));
+  const condTotals = conditionTotals(derivePenalties(events, liveGameMs), tab === 'all' ? undefined : tab);
   const avgOn = (sum: number, clock: number) => (clock > 0 ? (sum / clock).toFixed(2) : '—');
 
   return (
@@ -126,6 +134,27 @@ export function Summary({ session }: { session: GameSession }) {
               {' '}{periodLabel(g.period)} {formatClock(g.gameMs)} · {g.strength} · <span className="muted">{g.onIce.map(name).join(', ') || 'no units on ice'}</span>
             </li>
           ) : null)}
+        </ul>
+      )}
+
+      <h2>Penalties</h2>
+      <p className="muted small" data-testid="condition-totals">
+        Power play {formatClock(condTotals.PP)} · Penalty kill {formatClock(condTotals.PK)}{condTotals.EVEN ? ` · 4-on-4 ${formatClock(condTotals.EVEN)}` : ''}
+      </p>
+      {penalties.length === 0 ? <p className="muted">None.</p> : (
+        <ul className="goal-list" data-testid="penalty-list">
+          {penalties.map((p) => {
+            const who = penaltyPlayer(p, name);
+            return (
+              <li key={p.ref}>
+                <span className={p.side === 'for' ? 'pp-mark' : 'pk-mark'}>{p.side === 'for' ? '⚑ For (PP)' : '⚐ Against (PK)'}</span>
+                {' '}{periodLabel(p.period)} {formatClock(p.gameMs)}
+                {who && <> · <strong>{who}</strong></>}
+                {p.lengthMs !== null && <> · {formatClock(p.lengthMs)}</>}
+                {p.end && <span className="muted"> · {penaltyEndText(p)}</span>}
+              </li>
+            );
+          })}
         </ul>
       )}
 

@@ -97,7 +97,14 @@ export function SettingsScreen() {
           valueMs={settings.longRestMs}
           onSave={(longRestMs) => void save({ longRestMs })}
         />
-        <p className="muted small">Both apply to lines and D pairs only, and use game-clock time.</p>
+        <p className="muted small">Both apply to lines, D pairs and skaters, and use game-clock time.</p>
+        <ThresholdInput
+          label="Default penalty length (m:ss)"
+          testId="penalty-length"
+          valueMs={settings.defaultPenaltyMs}
+          onSave={(defaultPenaltyMs) => void save({ defaultPenaltyMs })}
+        />
+        <p className="muted small">A penalty for starts a power play and a penalty against starts a penalty kill, for this long on the game clock. Each ends early on a power-play goal. You can change the length on the penalty sheet.</p>
         <label className="toggle">
           <input type="checkbox" checked={settings.audioTick} onChange={(e) => void save({ audioTick: e.target.checked })} />
           <span>Audio tick on taps <small className="muted">(off by default; the silent switch mutes it)</small></span>

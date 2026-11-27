@@ -107,6 +107,8 @@ table.stats tr.row-player td { color: #d6e1ec; }
 .plus { color: var(--ok); }
 .minus { color: #ff8a65; }
 .warnc { color: var(--warn); }
+.pp-mark { color: #e69f00; font-weight: 800; }
+.pk-mark { color: #e7a3cb; font-weight: 800; }
 .goal-list { list-style: none; padding: 0; line-height: 1.9; }
 .gf-mark { color: #56b4e9; font-weight: 800; }
 .ga-mark { color: #ff8a3d; font-weight: 800; }
@@ -162,3 +164,12 @@ a.big-btn.as-link { display: flex; align-items: center; justify-content: center;
 .roster-row input, .roster-row select { min-height: 44px; min-width: 0; width: 100%; }
 .roster-row input.dupe { outline: 2px solid var(--warn); }
 .roster-add { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Penalty sheet: player numbers and length chips */
+.penalty-sheet .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.penalty-sheet .pick-lengths { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.penalty-sheet .pick { min-height: 56px; min-width: 64px; border-radius: 12px; border: 2px solid #3a76ad; background: var(--navy-2); font-size: 1.2rem; font-weight: 800; color: inherit; }
+.penalty-sheet .pick.sel { background: #cc79a7; border-color: #fff; color: #000; }
+.penalty-sheet .pick:disabled { opacity: .35; }
+.penalty-sheet .pick-number { display: grid; gap: 6px; margin-bottom: 12px; font-weight: 700; }
+.penalty-sheet .pick-number input { min-height: 52px; font-size: 1.3rem; }
