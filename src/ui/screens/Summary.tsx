@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  computeStats,
   formatClock,
   formatMaybe,
   gameMsAt,
+  isRoster,
+  reportView,
+  statRows,
   timelineSvg,
   toiCheck,
+  unitNamer,
   type GameEvent,
 } from '../../core';
 import { navigate } from '../hooks/useHashRoute';
@@ -39,15 +42,17 @@ export function Summary({ session }: { session: GameSession }) {
   const [boxRef, boxW] = useWidth<HTMLDivElement>();
 
   const timelineWidth = tab === 'all' ? Math.max(boxW, 1100) : Math.max(boxW, 360);
-  const svg = useMemo(
-    () => timelineSvg({ units: meta.units, events, period: tab, periodLengthMs: meta.periodLengthMs, liveGameMs, width: timelineWidth }).svg,
-    // liveGameMs changes every tick only while live; that's the point.
-    [meta.units, meta.periodLengthMs, events, events.length, tab, liveGameMs, timelineWidth],
-  );
-  const stats = computeStats(meta.units, events, { period: tab === 'all' ? undefined : tab, liveGameMs });
-  const checks = toiCheck(meta.units, events, liveGameMs).filter((r) => tab === 'all' || r.period === tab);
+  const roster = isRoster(meta);
+  const svg = useMemo(() => {
+    const view = reportView(meta, events);
+    return timelineSvg({ units: view.units, events: view.events, period: tab, periodLengthMs: meta.periodLengthMs, liveGameMs, width: timelineWidth }).svg;
+  // liveGameMs changes every tick only while live; that's the point.
+  }, [meta, events, events.length, tab, liveGameMs, timelineWidth]);
+  const rows = statRows(meta, events, { period: tab === 'all' ? undefined : tab, liveGameMs });
+  const checks = toiCheck(engine.units, events, liveGameMs).filter((r) => tab === 'all' || r.period === tab);
   const goals = events.filter((e) => (e.type === 'goalFor' || e.type === 'goalAgainst') && (tab === 'all' || e.period === tab));
-  const name = (id: string) => meta.units.find((u) => u.id === id)?.name ?? id;
+  const name = unitNamer(meta);
+  const avgOn = (sum: number, clock: number) => (clock > 0 ? (sum / clock).toFixed(2) : '—');
 
   return (
     <main className="page summary">
@@ -79,19 +84,19 @@ export function Summary({ session }: { session: GameSession }) {
       </div>
       {tab === 'all' && boxW < 1100 && <p className="muted small">Scroll sideways for the full game, or turn the phone.</p>}
 
-      <h2>Unit stats {tab === 'all' ? '(game)' : `(${periodLabel(tab)})`}</h2>
+      <h2>{roster ? 'Time on ice' : 'Unit stats'} {tab === 'all' ? '(game)' : `(${periodLabel(tab)})`}</h2>
       <div className="table-scroll">
         <table className="stats" data-testid="stats-table">
           <thead>
             <tr>
-              <th scope="col">Unit</th><th scope="col">Shifts</th><th scope="col">TOI</th><th scope="col">Avg</th>
+              <th scope="col">{roster ? 'Line / player' : 'Unit'}</th><th scope="col">Shifts</th><th scope="col">TOI</th><th scope="col">Avg</th>
               <th scope="col">Long</th><th scope="col">Short</th><th scope="col" title="Average time between shifts">Rest</th><th scope="col">GF</th><th scope="col">GA</th><th scope="col">+/-</th>
             </tr>
           </thead>
           <tbody>
-            {stats.map((st) => (
-              <tr key={st.unitId}>
-                <th scope="row">{name(st.unitId)}</th>
+            {rows.map(({ kind, unit, stats: st }) => (
+              <tr key={unit.id} className={`row-${kind}`}>
+                <th scope="row">{unit.name}</th>
                 <td>{st.shifts}</td>
                 <td>{formatClock(st.toiMs)}</td>
                 <td>{formatMaybe(st.avgMs)}</td>
@@ -107,7 +112,10 @@ export function Summary({ session }: { session: GameSession }) {
         </table>
       </div>
 
-      <p className="muted small">Rest = average game-clock time between shifts (pauses and intermissions don't count).</p>
+      <p className="muted small">
+        Rest = average game-clock time between shifts (pauses and intermissions don't count).
+        {roster && ' Line rows count the time a majority of the line was on together (2 of 3 forwards, both D).'}
+      </p>
 
       <h2>Goals</h2>
       {goals.length === 0 ? <p className="muted">None.</p> : (
@@ -122,6 +130,24 @@ export function Summary({ session }: { session: GameSession }) {
       )}
 
       <h2>TOI check</h2>
+      {roster ? (
+        <>
+          <p className="muted small">Average skaters on the ice: normally 3 forwards and 2 D at even strength.</p>
+          <table className="stats check" data-testid="toi-check">
+            <thead><tr><th>Period</th><th>Clock</th><th>Forwards</th><th>Defense</th></tr></thead>
+            <tbody>
+              {checks.map((r) => (
+                <tr key={r.period}>
+                  <th scope="row">{periodLabel(r.period)}</th>
+                  <td>{formatClock(r.clockMs)}</td>
+                  <td>{avgOn(r.sums.F, r.clockMs)}</td>
+                  <td>{avgOn(r.sums.D, r.clockMs)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (<>
       <p className="muted small">Forward TOI and D TOI should each match the game clock when a line and a pair were always on the ice.</p>
       <table className="stats check" data-testid="toi-check">
         <thead><tr><th>Period</th><th>Clock</th><th>Forwards</th><th>Defense</th><th>PP+PK</th></tr></thead>
@@ -137,6 +163,7 @@ export function Summary({ session }: { session: GameSession }) {
           ))}
         </tbody>
       </table>
+      </>)}
     </main>
   );
 }

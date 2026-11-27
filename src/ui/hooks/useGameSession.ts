@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { GameEngine, type Command, type CommandResult, type GameEvent, type GameMeta } from '../../core';
+import { GameEngine, rosterLines, trackedUnits, type Command, type CommandResult, type GameEvent, type GameMeta } from '../../core';
 import { appendEvents, getEvents, getGame, putGame, removeEvents, replaceEvents } from '../../data/db';
 
 export interface GameSession {
@@ -33,7 +33,7 @@ export function useGameSession(gameId: string): GameSession | 'loading' | 'missi
       const events = await getEvents(gameId);
       if (cancelled) return;
       metaRef.current = meta;
-      setLoaded({ meta, engine: new GameEngine(meta.units, Date.now, events) });
+      setLoaded({ meta, engine: new GameEngine(trackedUnits(meta), Date.now, events, rosterLines(meta)) });
     })().catch((e) => !cancelled && setSaveError(`Could not load game: ${e}`));
     return () => { cancelled = true; };
   }, [gameId]);
@@ -78,7 +78,7 @@ export function useGameSession(gameId: string): GameSession | 'loading' | 'missi
   const replaceLog = useCallback(async (events: GameEvent[]) => {
     const meta = metaRef.current;
     if (!meta) return;
-    const next = new GameEngine(meta.units, Date.now, events);
+    const next = new GameEngine(trackedUnits(meta), Date.now, events, rosterLines(meta));
     metaRef.current = { ...meta, score: { ...next.state.score }, updatedAt: Date.now() };
     setLoaded({ meta: metaRef.current, engine: next });
     await replaceEvents(metaRef.current, events).then(() => setSaveError(null), onSaveFail);

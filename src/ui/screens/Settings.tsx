@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { formatClock, generateDemoGame, isoDate, makeBackup, MAX_THRESHOLD_MS, parseBackup, parseClock, type Backup } from '../../core';
+import { DEFAULT_UNITS, DEMO_ROSTER, formatClock, generateDemoGame, isoDate, sanitizeRoster, makeBackup, MAX_THRESHOLD_MS, parseBackup, parseClock, type Backup } from '../../core';
 import { appendEvents, exportAll, importGames, putSettings } from '../../data/db';
 import { canShareFiles, downloadFile } from '../../export/deliver';
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { UnitsEditor } from '../components/UnitsEditor';
+import { ModePicker, RosterEditor } from '../components/RosterEditor';
 import { navigate } from '../hooks/useHashRoute';
 import { useSettings } from '../hooks/useSettings';
 
@@ -49,8 +50,12 @@ export function SettingsScreen() {
     setTimeout(() => location.reload(), 800);
   };
 
-  const loadDemo = async () => {
-    const { meta, events } = generateDemoGame({ id: crypto.randomUUID(), startWall: Date.now() - 3 * 3600_000 });
+  const loadDemo = async (roster = false) => {
+    const { meta, events } = generateDemoGame({
+      id: crypto.randomUUID(),
+      startWall: Date.now() - 3 * 3600_000,
+      ...(roster ? { units: DEFAULT_UNITS, players: DEMO_ROSTER } : {}),
+    });
     await appendEvents(meta, events);
     navigate(`game/${meta.id}/summary`);
   };
@@ -103,6 +108,15 @@ export function SettingsScreen() {
       <p className="muted small">Used for new games. Rename (e.g. “Smith-Jones-Lee”) or add Line 4 / a third D pair. Each game can still rename its own units.</p>
       <UnitsEditor units={settings.defaultUnits} allowAddRemove onChange={(defaultUnits) => void save({ defaultUnits })} />
 
+      <h2>Roster</h2>
+      <p className="muted small">Track individual players instead of whole lines. Each new game copies this roster; you can change it for one game when you create it.</p>
+      <ModePicker legend="New games track" value={settings.defaultMode} onChange={(defaultMode) => void save({ defaultMode })} />
+      <RosterEditor
+        players={sanitizeRoster(settings.defaultRoster, settings.defaultUnits)}
+        units={settings.defaultUnits}
+        onChange={(defaultRoster) => void save({ defaultRoster })}
+      />
+
       <h2>Back up &amp; restore</h2>
       <p className="muted small">iOS can clear website storage in rare cases. Back up after each game and keep the file in Files or email.</p>
       <button className="big-btn primary" onClick={() => void backup()}>Back up all data</button>
@@ -112,6 +126,7 @@ export function SettingsScreen() {
 
       <h2>Demo</h2>
       <button className="big-btn" onClick={() => void loadDemo()}>Load demo game</button>
+      <button className="big-btn" onClick={() => void loadDemo(true)}>Load roster demo game</button>
 
       {pending && (
         <ConfirmSheet

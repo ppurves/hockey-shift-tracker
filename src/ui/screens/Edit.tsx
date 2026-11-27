@@ -12,6 +12,7 @@ import {
   type EditResult,
   type GameEvent,
   type Shift,
+  unitNamer,
 } from '../../core';
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { navigate } from '../hooks/useHashRoute';
@@ -40,9 +41,11 @@ export function Edit({ session }: { session: GameSession }) {
   const [msg, setMsg] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
   const [editing, setEditing] = useState<{ shift: Shift; start: string; end: string } | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; run: () => EditResult } | null>(null);
-  const [newShift, setNewShift] = useState({ unitId: meta.units[0]?.id ?? '', start: '', end: '' });
+  // Tracked units: lines/pairs in lines mode, players + PP/PK in roster mode.
+  const units = engine.units;
+  const [newShift, setNewShift] = useState({ unitId: units[0]?.id ?? '', start: '', end: '' });
   const [newMarker, setNewMarker] = useState<{ type: Marker; time: string }>({ type: 'goalFor', time: '' });
-  const name = (id: string) => meta.units.find((u) => u.id === id)?.name ?? id;
+  const name = unitNamer(meta);
 
   if (meta.status !== 'final') {
     return (
@@ -95,7 +98,7 @@ export function Edit({ session }: { session: GameSession }) {
               {'onIce' in e && <span className="muted small"> · {e.strength} · {e.onIce.map(name).join(', ') || 'no units'}</span>}
             </span>
             <button className="small-btn danger" aria-label={`Delete ${MARKER_LABEL[e.type as Marker]} at ${formatClock(e.gameMs)}`}
-              onClick={() => setConfirm({ title: `Delete ${MARKER_LABEL[e.type as Marker]} at ${formatClock(e.gameMs)}?`, run: () => deleteMarker(meta.units, events, e.seq) })}>
+              onClick={() => setConfirm({ title: `Delete ${MARKER_LABEL[e.type as Marker]} at ${formatClock(e.gameMs)}?`, run: () => deleteMarker(units, events, e.seq) })}>
               Delete
             </button>
           </li>
@@ -109,7 +112,7 @@ export function Edit({ session }: { session: GameSession }) {
         <button className="small-btn primary" onClick={async () => {
           const t = parseClock(newMarker.time);
           if (t === null) { setMsg({ text: 'Enter the time as m:ss, e.g. 3:05.', tone: 'error' }); return; }
-          if (await apply(addMarker(meta.units, events, newMarker.type, period, t), `Added ${MARKER_LABEL[newMarker.type]} at ${formatClock(t)}.`)) {
+          if (await apply(addMarker(units, events, newMarker.type, period, t), `Added ${MARKER_LABEL[newMarker.type]} at ${formatClock(t)}.`)) {
             setNewMarker({ ...newMarker, time: '' });
           }
         }}>Add</button>
@@ -118,13 +121,13 @@ export function Edit({ session }: { session: GameSession }) {
       <h2>Shifts ({shifts.length})</h2>
       <div className="add-row">
         <select aria-label="Unit" value={newShift.unitId} onChange={(e) => setNewShift({ ...newShift, unitId: e.target.value })}>
-          {meta.units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
         <TimeInput label="from" value={newShift.start} onChange={(start) => setNewShift({ ...newShift, start })} />
         <TimeInput label="to" value={newShift.end} onChange={(end) => setNewShift({ ...newShift, end })} />
         <button className="small-btn primary" onClick={async () => {
           const t = times(newShift.start, newShift.end);
-          if (t && await apply(addShift(meta.units, events, newShift.unitId, period, t[0], t[1]), `Added ${name(newShift.unitId)} shift.`)) {
+          if (t && await apply(addShift(units, events, newShift.unitId, period, t[0], t[1]), `Added ${name(newShift.unitId)} shift.`)) {
             setNewShift({ ...newShift, start: '', end: '' });
           }
         }}>Add shift</button>
@@ -142,7 +145,7 @@ export function Edit({ session }: { session: GameSession }) {
                   <TimeInput label="to" value={editing.end} onChange={(end) => setEditing({ ...editing, end })} />
                   <button className="small-btn primary" onClick={async () => {
                     const t = times(editing.start, editing.end);
-                    if (t && await apply(editShift(meta.units, events, s, t[0], t[1]), `Updated ${name(s.unitId)} shift.`)) setEditing(null);
+                    if (t && await apply(editShift(units, events, s, t[0], t[1]), `Updated ${name(s.unitId)} shift.`)) setEditing(null);
                   }}>Save</button>
                   <button className="small-btn" onClick={() => setEditing(null)}>Cancel</button>
                 </>
@@ -155,7 +158,7 @@ export function Edit({ session }: { session: GameSession }) {
                     <button className="small-btn" aria-label={`Edit ${name(s.unitId)} shift at ${formatClock(s.startMs)}`}
                       onClick={() => setEditing({ shift: s, start: formatClock(s.startMs), end: formatClock(s.endMs) })}>Edit</button>
                     <button className="small-btn danger" aria-label={`Delete ${name(s.unitId)} shift at ${formatClock(s.startMs)}`}
-                      onClick={() => setConfirm({ title: `Delete ${name(s.unitId)} shift ${formatClock(s.startMs)}–${formatClock(s.endMs)}?`, run: () => deleteShift(meta.units, events, s) })}>Delete</button>
+                      onClick={() => setConfirm({ title: `Delete ${name(s.unitId)} shift ${formatClock(s.startMs)}–${formatClock(s.endMs)}?`, run: () => deleteShift(units, events, s) })}>Delete</button>
                   </span>
                 </>
               )}

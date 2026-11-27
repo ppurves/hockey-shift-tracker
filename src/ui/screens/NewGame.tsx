@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { DEFAULT_PERIOD_MS, isoDate, newGameMeta, type UnitDef } from '../../core';
+import { DEFAULT_PERIOD_MS, isoDate, newGameMeta, positionGroup, sanitizeRoster, type Player, type TrackMode, type UnitDef } from '../../core';
 import { putGame } from '../../data/db';
 import { UnitsEditor } from '../components/UnitsEditor';
+import { ModePicker, RosterEditor } from '../components/RosterEditor';
 import { navigate } from '../hooks/useHashRoute';
 import { useSettings } from '../hooks/useSettings';
 
@@ -14,17 +15,34 @@ export function NewGame() {
   const { settings, loaded } = useSettings();
   const [units, setUnits] = useState<UnitDef[] | null>(null);
   const [showUnits, setShowUnits] = useState(false);
+  const [mode, setMode] = useState<TrackMode | null>(null);
+  const [players, setPlayers] = useState<Player[] | null>(null);
+  const [showRoster, setShowRoster] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
     if (!loaded) return;
     setUnits((u) => u ?? settings.defaultUnits.map((x) => ({ ...x })));
+    setMode((m) => m ?? settings.defaultMode);
+    setPlayers((p) => p ?? settings.defaultRoster.map((x) => ({ ...x })));
     setMinutes(String(settings.defaultPeriodLengthMs / 60_000));
   }, [loaded, settings]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
+    const roster = mode === 'roster';
+    const skaters = (players ?? []).filter((p) => positionGroup(p.position));
+    if (roster && !skaters.length) {
+      setError('Add at least one skater to the roster, or switch to Lines only.');
+      setShowRoster(true);
+      return;
+    }
     setBusy(true);
     const meta = newGameMeta(
-      { opponent, date, homeAway, periodLengthMs: Math.round(Number(minutes) * 60_000), units: units ?? undefined },
+      {
+        opponent, date, homeAway, periodLengthMs: Math.round(Number(minutes) * 60_000), units: units ?? undefined,
+        mode: roster ? 'roster' : 'lines',
+        ...(roster ? { players: players ?? [] } : {}),
+      },
       crypto.randomUUID(),
       Date.now(),
     );
@@ -57,11 +75,21 @@ export function NewGame() {
         {units && (
           <div>
             <button type="button" className="link-btn" aria-expanded={showUnits} onClick={() => setShowUnits(!showUnits)}>
-              {showUnits ? '▾' : '▸'} Unit names for this game ({units.length} units)
+              {showUnits ? '▾' : '▸'} {mode === 'roster' ? 'Line names' : 'Unit names'} for this game ({units.length} units)
             </button>
             {showUnits && <UnitsEditor units={units} onChange={setUnits} />}
           </div>
         )}
+        {mode && <ModePicker legend="Track" value={mode} onChange={(m) => { setMode(m); setError(''); }} />}
+        {mode === 'roster' && units && players && (
+          <div>
+            <button type="button" className="link-btn" aria-expanded={showRoster} onClick={() => setShowRoster(!showRoster)}>
+              {showRoster ? '▾' : '▸'} Roster for this game ({players.filter((p) => positionGroup(p.position)).length} skaters)
+            </button>
+            {showRoster && <RosterEditor players={sanitizeRoster(players, units)} units={units} onChange={(p) => { setPlayers(p); setError(''); }} />}
+          </div>
+        )}
+        {error && <p className="strip error" role="alert">{error}</p>}
         <button className="big-btn primary" disabled={busy || !loaded}>Create game</button>
       </form>
     </main>

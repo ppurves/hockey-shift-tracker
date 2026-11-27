@@ -99,6 +99,11 @@ table.stats th, table.stats td { padding: 8px 6px; text-align: right; border-bot
 table.stats thead th { color: var(--muted); font-size: 0.8rem; font-weight: 700; }
 table.stats tbody th { text-align: left; position: sticky; left: 0; background: var(--bg); }
 table.stats thead th:first-child { text-align: left; }
+/* Roster: line rows stand out; players sit indented under their line. */
+table.stats tr.row-line th, table.stats tr.row-line td { font-weight: 800; background: #132b44; border-top: 2px solid #3a76ad; }
+table.stats tr.row-line th { background: #132b44; }
+table.stats tr.row-player th { padding-left: 18px; font-weight: 500; }
+table.stats tr.row-player td { color: #d6e1ec; }
 .plus { color: var(--ok); }
 .minus { color: #ff8a65; }
 .warnc { color: var(--warn); }
@@ -150,3 +155,10 @@ a.big-btn.as-link { display: flex; align-items: center; justify-content: center;
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Roster editor */
+.roster-editor { display: grid; gap: 6px; }
+.roster-head, .roster-row { display: grid; grid-template-columns: 3.4em 1fr 4em 6.5em 2.6em; gap: 6px; align-items: center; }
+.roster-row input, .roster-row select { min-height: 44px; min-width: 0; width: 100%; }
+.roster-row input.dupe { outline: 2px solid var(--warn); }
+.roster-add { display: flex; gap: 8px; flex-wrap: wrap; }

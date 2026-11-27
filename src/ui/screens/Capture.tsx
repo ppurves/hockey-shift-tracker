@@ -4,7 +4,12 @@ import {
   exclusionSet,
   formatClock,
   gameMsAt,
+  isRoster,
+  lineThreshold,
   restMsAt,
+  rosterLines,
+  unitNamer,
+  type GameMeta,
   type Command,
   type GameEvent,
   type UnitDef,
@@ -21,21 +26,45 @@ import { tick } from '../audio';
 
 export const periodLabel = (p: number) => (p <= 3 ? `P${p}` : p === 4 ? 'OT' : `OT${p - 3}`);
 
-/** Units grouped into on-screen rows: forwards, defense, special teams (PP + PK). */
-function rows(units: readonly UnitDef[]) {
-  const by = (set: string) => units.filter((u) => exclusionSet(u.group) === set);
-  const st = by('ST');
-  // Up to 4 special-teams tiles share a row; more get a PP row and a PK row.
-  const stRows = st.length > 4
+type Row = { key: string; label: string; units: UnitDef[]; line?: UnitDef };
+
+/** Up to 4 special-teams tiles share a row; more get a PP row and a PK row. */
+function stRows(st: UnitDef[]): Row[] {
+  return st.length > 4
     ? [
         { key: 'PP', label: 'Power play', units: st.filter((u) => u.group === 'PP') },
         { key: 'PK', label: 'Penalty kill', units: st.filter((u) => u.group === 'PK') },
       ]
     : [{ key: 'ST', label: 'Special teams', units: st }];
+}
+
+/**
+ * Roster mode: one row per line (a line tile, then its players), a row of
+ * extras, then special teams. `tracked` is the engine's unit list.
+ */
+function rosterRows(meta: GameMeta, tracked: readonly UnitDef[]): Row[] {
+  const players = tracked.filter((u) => u.kind === 'player');
+  const lineRows: Row[] = rosterLines(meta)
+    .map((line) => ({ key: line.id, label: line.name, line, units: players.filter((p) => p.lineId === line.id) }))
+    .filter((r) => r.units.length);
+  const extras = players.filter((p) => !lineRows.some((r) => r.line!.id === p.lineId));
+  const extraRows: Row[] = extras.length > 5
+    ? [
+        { key: 'XF', label: 'Extra forwards', units: extras.filter((p) => p.group === 'F') },
+        { key: 'XD', label: 'Extra defense', units: extras.filter((p) => p.group === 'D') },
+      ]
+    : [{ key: 'X', label: 'Extras', units: extras }];
+  return [...lineRows, ...extraRows, ...stRows(tracked.filter((u) => u.group === 'PP' || u.group === 'PK'))].filter((r) => r.units.length);
+}
+
+/** Units grouped into on-screen rows: forwards, defense, special teams (PP + PK). */
+function rows(units: readonly UnitDef[]): Row[] {
+  const by = (set: string) => units.filter((u) => exclusionSet(u.group) === set);
+  const st = by('ST');
   return [
     { key: 'F', label: 'Forwards', units: by('F') },
     { key: 'D', label: 'Defense', units: by('D') },
-    ...stRows,
+    ...stRows(st),
   ].filter((r) => r.units.length);
 }
 
@@ -52,7 +81,8 @@ export function Capture({ session }: { session: GameSession }) {
   const nextPeriod = (s.period ?? 0) + 1;
   const paused = livePeriod && !s.running;
   const overLength = livePeriod && gameMs >= meta.periodLengthMs;
-  const name = (id: string) => meta.units.find((u) => u.id === id)?.name ?? id;
+  const name = unitNamer(meta);
+  const roster = isRoster(meta);
   const undoPeek = engine.peekUndo();
 
   const { settings } = useSettings();
@@ -109,7 +139,64 @@ export function Capture({ session }: { session: GameSession }) {
 
   const doUndo = () => {
     const undone = undo();
-    if (undone.length) show(`Undone: ${describeTxn(undone, meta.units)}`);
+    if (undone.length) show(`Undone: ${describeTxn(undone, engine.units, engine.lines)}`);
+  };
+
+  const unitRows = roster ? rosterRows(meta, engine.units) : rows(meta.units);
+
+  /** A line or pair (lines mode), a PP/PK unit, or a roster player. */
+  const unitTile = (u: UnitDef) => {
+    const a = s.active[u.id];
+    const ms = a ? gameMs - a.startMs : s.lastShiftMs[u.id] ?? 0;
+    // Rest and long-shift flags are for lines, D pairs and skaters only.
+    const evenStrength = u.group === 'F' || u.group === 'D';
+    const rest = evenStrength && !a && s.period !== null ? restMsAt(s, u.id, s.periodEnded ? s.accMs : gameMs) : null;
+    const longShift = evenStrength && !!a && ms > settings.longShiftMs;
+    const longRest = rest !== null && rest > settings.longRestMs;
+    const state = a ? '● ON ICE' : rest !== null ? `off ${formatClock(rest)}` : s.lastShiftMs[u.id] !== undefined ? 'last shift' : '';
+    const player = u.kind === 'player';
+    const title = player && u.number ? `#${u.number}` : u.name;
+    const sub = player && u.number ? u.name.replace(/^#\S+\s*/, '') : '';
+    return (
+      <TapButton
+        key={u.id}
+        className={`tile g-${u.group} ${player ? 'player' : ''} ${a ? 'on' : ''} ${longShift ? 'long-shift' : ''} ${longRest ? 'long-rest' : ''}`}
+        aria-pressed={!!a}
+        aria-label={`${u.name}, ${a ? 'on ice' : 'off'}, ${formatClock(ms)}${longShift ? ', long shift' : ''}${rest !== null ? `, off for ${formatClock(rest)}` : ''}`}
+        data-unit={u.id}
+        onTap={() => run({ type: 'tapUnit', unitId: u.id })}
+      >
+        <span className="tile-name">{title}</span>
+        {sub && <span className="tile-pname">{sub}</span>}
+        <span className="tile-time">{formatClock(ms)}</span>
+        <span className="tile-state" data-testid={`rest-${u.id}`}>{state}</span>
+      </TapButton>
+    );
+  };
+
+  /** Roster mode: puts the whole line on (or off when it's all on). */
+  const lineTile = (line: UnitDef, members: UnitDef[]) => {
+    const on = members.filter((m) => s.active[m.id]);
+    const isOn = on.length >= lineThreshold(members.length);
+    const full = on.length === members.length;
+    // Longest current shift among its players, so a tired line stands out.
+    const ms = on.reduce((m, p) => Math.max(m, gameMs - s.active[p.id].startMs), 0);
+    const longShift = on.length > 0 && ms > settings.longShiftMs;
+    const state = full ? '● ON ICE' : on.length ? `${on.length}/${members.length} on` : 'tap: all on';
+    return (
+      <TapButton
+        key={`line-${line.id}`}
+        className={`tile line-tile g-${line.group} ${isOn ? 'on' : ''} ${on.length && !full ? 'partial' : ''} ${longShift ? 'long-shift' : ''}`}
+        aria-pressed={full}
+        aria-label={`${line.name}, ${on.length} of ${members.length} on ice${on.length ? `, ${formatClock(ms)}` : ''}. Tap to ${full ? 'take the line off' : 'put the whole line on'}`}
+        data-line={line.id}
+        onTap={() => run({ type: 'tapLine', lineId: line.id })}
+      >
+        <span className="tile-name">{line.name}</span>
+        <span className="tile-time">{on.length ? formatClock(ms) : '—'}</span>
+        <span className="tile-state">{state}</span>
+      </TapButton>
+    );
   };
 
   return (
@@ -139,33 +226,15 @@ export function Capture({ session }: { session: GameSession }) {
         {s.periodEnded && <div className="strip info">{periodLabel(s.period!)} ended. Start {periodLabel(nextPeriod)} when ready.</div>}
       </div>
 
-      <main className="cap-units">
-        {rows(meta.units).map((row) => (
+      <main
+        className={`cap-units ${roster ? 'roster' : ''}`}
+        // Roster rows share one column grid so pairs and extras line up with the lines.
+        style={roster ? ({ '--cols': Math.max(4, ...unitRows.map((r) => r.units.length + (r.line ? 1 : 0))) } as React.CSSProperties) : undefined}
+      >
+        {unitRows.map((row) => (
           <section key={row.key} className={`unit-row row-${row.key}`} aria-label={row.label}>
-            {row.units.map((u) => {
-              const a = s.active[u.id];
-              const ms = a ? gameMs - a.startMs : s.lastShiftMs[u.id] ?? 0;
-              // Rest and long-shift flags are for lines and D pairs only.
-              const evenStrength = u.group === 'F' || u.group === 'D';
-              const rest = evenStrength && !a && s.period !== null ? restMsAt(s, u.id, s.periodEnded ? s.accMs : gameMs) : null;
-              const longShift = evenStrength && !!a && ms > settings.longShiftMs;
-              const longRest = rest !== null && rest > settings.longRestMs;
-              const state = a ? '● ON ICE' : rest !== null ? `off ${formatClock(rest)}` : s.lastShiftMs[u.id] !== undefined ? 'last shift' : '';
-              return (
-                <TapButton
-                  key={u.id}
-                  className={`tile g-${u.group} ${a ? 'on' : ''} ${longShift ? 'long-shift' : ''} ${longRest ? 'long-rest' : ''}`}
-                  aria-pressed={!!a}
-                  aria-label={`${u.name}, ${a ? 'on ice' : 'off'}, ${formatClock(ms)}${longShift ? ', long shift' : ''}${rest !== null ? `, off for ${formatClock(rest)}` : ''}`}
-                  data-unit={u.id}
-                  onTap={() => run({ type: 'tapUnit', unitId: u.id })}
-                >
-                  <span className="tile-name">{u.name}</span>
-                  <span className="tile-time">{formatClock(ms)}</span>
-                  <span className="tile-state" data-testid={`rest-${u.id}`}>{state}</span>
-                </TapButton>
-              );
-            })}
+            {row.line && lineTile(row.line, row.units)}
+            {row.units.map(unitTile)}
           </section>
         ))}
       </main>

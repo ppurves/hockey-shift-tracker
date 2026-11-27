@@ -43,6 +43,17 @@
 .tile.g-PP, .tile.g-PK { border-style: dashed; }
 .tile.on { background: var(--on); border: 3px solid #fff; color: #000; box-shadow: 0 0 0 3px #000 inset; }
 .tile.on .tile-time, .tile.on .tile-state { opacity: 1; }
+/* Roster mode: line tile first in each row, then its players. */
+.cap-units.roster { gap: 6px; }
+.cap-units.roster .unit-row { gap: 6px; grid-auto-flow: row; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); }
+.tile.line-tile { border-width: 3px; border-color: #6fa3d6; background: #16314d; }
+.tile.line-tile .tile-name { font-size: min(0.95rem, 3.8vw, 3.8vh); }
+.tile.line-tile.partial { border-style: dashed; border-color: var(--on); }
+.tile.player { min-height: 60px; padding: 2px; gap: 0; }
+.tile.player .tile-name { font-size: min(1.25rem, 5vw, 4.4vh); }
+.tile-pname { font-size: min(0.68rem, 2.8vw); font-weight: 700; opacity: .8; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-units.roster .tile-time { font-size: min(1.2rem, 4.8vw, 3.8vh); }
+.cap-units.roster .tile-state { font-size: min(0.62rem, 2.6vw); }
 /* Shift over 1:30: red instead of yellow. */
 .tile.on.long-shift { background: var(--long); color: #fff; }
 /* Off over 5:00: red text. */
