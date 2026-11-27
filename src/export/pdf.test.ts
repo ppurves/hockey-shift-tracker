@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateDemoGame } from '../core';
+import { DEMO_ROSTER, generateDemoGame } from '../core';
 import { buildPdf } from './pdf';
 
 // 1x1 transparent PNG.
@@ -28,5 +28,16 @@ describe('buildPdf', () => {
     const doc = buildPdf({ meta: demo.meta, events: [], timeline: null, generatedAt: 0, compress: false });
     expect(doc.getNumberOfPages()).toBe(2);
     expect(doc.output()).toContain('None.');
+  });
+
+  it('roster game: lines with players, ASCII only, extra pages as needed', () => {
+    const roster = generateDemoGame({ id: 'r', startWall: Date.UTC(2026, 10, 21, 19), players: DEMO_ROSTER });
+    const doc = buildPdf({ ...roster, timeline: { dataUrl: PNG, width: 1400, height: 700 }, generatedAt: 0, compress: false });
+    const raw = doc.output();
+    expect(raw).toContain('Time on ice by line and player');
+    expect(raw).toContain('#9 Avery');
+    expect(raw).toContain('average skaters on ice');
+    expect(raw).not.toContain('—');
+    expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(3);
   });
 });

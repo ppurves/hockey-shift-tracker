@@ -7,7 +7,7 @@ import { reduce, INITIAL_STATE, strengthOf } from './engine';
 import { formatClock } from './format';
 import { deriveShifts, periodLengths } from './stats';
 import type { EventBody, GameEvent, Shift, UnitDef } from './types';
-import { exclusionSet } from './units';
+import { exclusionKey } from './units';
 
 export type EditResult = { ok: true; events: GameEvent[] } | { ok: false; reason: string };
 
@@ -80,12 +80,12 @@ function validateShift(
   if (end === null) return `Period ${period} was not played.`;
   if (!(endMs > startMs)) return 'The end must be after the start.';
   if (startMs < 0 || endMs > end) return `Times must be within 0:00 and ${formatClock(end)}.`;
-  const set = exclusionSet(unit.group);
+  const set = exclusionKey(unit);
   for (const s of deriveShifts(events)) {
     if (s.period !== period) continue;
     if (ignore && s.unitId === ignore.unitId && s.startMs === ignore.startMs && s.period === ignore.period) continue;
     const other = units.find((u) => u.id === s.unitId);
-    if (!other || exclusionSet(other.group) !== set) continue;
+    if (!other || exclusionKey(other) !== set) continue;
     if (startMs < s.endMs && s.startMs < endMs) {
       return `Overlaps ${other.name} ${formatClock(s.startMs)}–${formatClock(s.endMs)}.`;
     }

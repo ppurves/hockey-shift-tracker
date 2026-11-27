@@ -1,10 +1,11 @@
 // Backup file format (one JSON file with every game and the settings).
 
-import { normalizeSettings, type Settings } from './settings';
+import { normalizeRoster, normalizeSettings, type Settings } from './settings';
 import type { GameEvent, GameMeta } from './types';
 
 export const BACKUP_APP = 'hockey-shift-tracker';
-export const BACKUP_VERSION = 1;
+/** 2: roster-mode games (mode, players). Version 1 files still restore. */
+export const BACKUP_VERSION = 2;
 
 export interface GameBundle {
   meta: GameMeta;
@@ -50,6 +51,14 @@ export function parseBackup(text: string): Backup {
     if (typeof m.opponent !== 'string' || typeof m.date !== 'string') throw new Error(`${where}: missing opponent/date.`);
     if (!Array.isArray(m.units) || !m.units.every((u) => typeof u?.id === 'string' && typeof u?.name === 'string' && ['F', 'D', 'PP', 'PK'].includes(u?.group))) {
       throw new Error(`${where}: invalid units.`);
+    }
+    if (m.mode === 'roster') {
+      if (!Array.isArray(m.players)) throw new Error(`${where}: roster game without players.`);
+      const valid = normalizeRoster(m.players);
+      if (valid.length !== m.players.length) throw new Error(`${where}: invalid roster.`);
+    } else {
+      m.mode = 'lines';
+      delete m.players;
     }
     if (!Array.isArray(g.events)) throw new Error(`${where}: missing events.`);
     g.events.forEach((e, j) => {

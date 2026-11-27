@@ -39,6 +39,8 @@ const LABEL_W = 96;
 const RIGHT_PAD = 14;
 const TOP_LANE = 30;
 const ROW_H = 30;
+/** Roster players get thinner rows under their line. */
+const PLAYER_ROW_H = 22;
 const AXIS_H = 22;
 const LEGEND_ROW = 22;
 
@@ -92,9 +94,13 @@ export function timelineSvg(opts: TimelineOptions): TimelineResult {
   const x = (period: number, ms: number) => LABEL_W + ((segOf.get(period)!.offset + ms) / totalMs) * plotW;
   const rowsTop = TOP_LANE;
   const legendRows = width < 540 ? 2 : 1;
-  const height = rowsTop + opts.units.length * ROW_H + AXIS_H + legendRows * LEGEND_ROW + 6;
-  const rowY = (i: number) => rowsTop + i * ROW_H + ROW_H / 2;
-  const rowsBottom = rowsTop + opts.units.length * ROW_H;
+  const rowH = opts.units.map((u) => (u.kind === 'player' ? PLAYER_ROW_H : ROW_H));
+  const rowTop: number[] = [];
+  let acc = rowsTop;
+  for (const h of rowH) { rowTop.push(acc); acc += h; }
+  const rowsBottom = acc;
+  const height = rowsBottom + AXIS_H + legendRows * LEGEND_ROW + 6;
+  const rowY = (i: number) => rowTop[i] + rowH[i] / 2;
   const inView = (period: number) => segOf.has(period);
 
   const out: string[] = [];
@@ -126,15 +132,19 @@ export function timelineSvg(opts: TimelineOptions): TimelineResult {
   const shifts = deriveShifts(opts.events, opts.liveGameMs).filter((s) => inView(s.period));
   opts.units.forEach((u, i) => {
     const y = rowY(i);
+    const player = u.kind === 'player';
     const label = u.name.length > 13 ? `${u.name.slice(0, 12)}…` : u.name;
+    const barH = player ? 10 : 16;
     out.push(
-      `<text x="${LABEL_W - 8}" y="${n(y + 4)}" fill="${c.text}" font-size="12.5" font-weight="700" text-anchor="end">${escapeXml(label)}</text>`,
+      player
+        ? `<text x="${LABEL_W - 8}" y="${n(y + 4)}" fill="${c.muted}" font-size="11" text-anchor="end">${escapeXml(label)}</text>`
+        : `<text x="${LABEL_W - 8}" y="${n(y + 4)}" fill="${c.text}" font-size="12.5" font-weight="700" text-anchor="end">${escapeXml(label)}</text>`,
       `<line x1="${LABEL_W}" y1="${n(y)}" x2="${LABEL_W + plotW}" y2="${n(y)}" stroke="${c.track}" stroke-width="1"/>`,
     );
     for (const s of shifts.filter((sh) => sh.unitId === u.id)) {
       const x1 = x(s.period, s.startMs);
       const w = Math.max(x(s.period, s.endMs) - x1, 1.5);
-      out.push(`<rect class="shift" data-unit="${escapeXml(u.id)}" x="${n(x1)}" y="${n(y - 8)}" width="${n(w)}" height="16" rx="2" fill="${GROUP_COLOR[u.group]}"${s.open ? ` fill-opacity="0.6"` : ''}/>`);
+      out.push(`<rect class="shift" data-unit="${escapeXml(u.id)}" x="${n(x1)}" y="${n(y - barH / 2)}" width="${n(w)}" height="${barH}" rx="2" fill="${GROUP_COLOR[u.group]}"${s.open ? ` fill-opacity="0.6"` : ''}/>`);
     }
   });
 
@@ -153,7 +163,7 @@ export function timelineSvg(opts: TimelineOptions): TimelineResult {
       );
       for (const id of e.onIce) {
         const i = unitIndex.get(id);
-        if (i !== undefined) out.push(`<g class="goal-on-ice ${e.type}">${triangle(ex, rowY(i), 11, up, col, mk)}</g>`);
+        if (i !== undefined) out.push(`<g class="goal-on-ice ${e.type}">${triangle(ex, rowY(i), opts.units[i].kind === 'player' ? 9 : 11, up, col, mk)}</g>`);
       }
     } else if (e.type === 'penaltyFor' || e.type === 'penaltyAgainst') {
       out.push(`<g class="penalty ${e.type}">${flag(ex, TOP_LANE / 2, e.type === 'penaltyFor', c.text)}</g>`);

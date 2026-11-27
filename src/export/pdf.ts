@@ -4,11 +4,15 @@
 
 import { jsPDF } from 'jspdf';
 import {
-  computeStats,
   formatClock,
+  isRoster,
+  statRows,
   toiCheck,
+  trackedUnits,
+  unitNamer,
   type GameEvent,
   type GameMeta,
+  type StatRow,
 } from '../core';
 
 const M = 36; // margin, pt
@@ -29,7 +33,10 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter', compress });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const name = (id: string) => meta.units.find((u) => u.id === id)?.name ?? id;
+  const name = unitNamer(meta);
+  const roster = isRoster(meta);
+  /** Players are indented under their line. */
+  const rowLabel = (r: StatRow) => (r.kind === 'player' ? `   ${r.unit.name}` : r.unit.name);
   const fit = (s: string, max: number) => {
     if (doc.getTextWidth(s) <= max) return s;
     while (s.length > 1 && doc.getTextWidth(`${s}...`) > max) s = s.slice(0, -1);
@@ -48,27 +55,50 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
     doc.setDrawColor(31, 78, 121).setLineWidth(1.5).line(M, M + 40, W - M, M + 40);
   };
 
-  /** Simple table; returns the y below it. */
-  const table = (y: number, cols: { label: string; w: number; align?: 'left' | 'right' }[], rows: string[][]) => {
-    const rowH = 18;
+  /**
+   * Simple table; returns the y below it. Continues on a new page (with the
+   * column headings again) when it runs out of room. `strong` rows (roster
+   * line rows) are bold and shaded.
+   */
+  const table = (
+    y: number,
+    cols: { label: string; w: number; align?: 'left' | 'right' }[],
+    rows: string[][],
+    strong: boolean[] = [],
+    subtitle = 'continued',
+  ) => {
+    const rowH = roster ? 16 : 18;
+    const tableW = cols.reduce((a, c) => a + c.w, 0);
+    const heads = () => {
+      let hx = M;
+      doc.setFont('helvetica', 'bold').setFontSize(9.5).setTextColor(85, 103, 122);
+      for (const c of cols) {
+        doc.text(c.label, c.align === 'left' ? hx + 4 : hx + c.w - 4, y + 12, { align: c.align === 'left' ? 'left' : 'right' });
+        hx += c.w;
+      }
+      y += rowH;
+    };
+    heads();
     let x = M;
-    doc.setFont('helvetica', 'bold').setFontSize(9.5).setTextColor(85, 103, 122);
-    for (const c of cols) {
-      doc.text(c.label, c.align === 'left' ? x + 4 : x + c.w - 4, y + 12, { align: c.align === 'left' ? 'left' : 'right' });
-      x += c.w;
-    }
-    y += rowH;
-    doc.setFont('helvetica', 'normal').setFontSize(10.5).setTextColor(11, 28, 46);
     rows.forEach((r, i) => {
-      if (i % 2 === 0) {
-        doc.setFillColor(238, 242, 246).rect(M, y, cols.reduce((a, c) => a + c.w, 0), rowH, 'F');
+      if (y + rowH > H - M) {
+        doc.addPage('letter', 'landscape');
+        header(subtitle);
+        y = M + 52;
+        heads();
+      }
+      doc.setFontSize(roster ? 9.5 : 10.5).setTextColor(11, 28, 46);
+      if (strong[i]) {
+        doc.setFillColor(214, 226, 238).rect(M, y, tableW, rowH, 'F');
+      } else if (i % 2 === 0) {
+        doc.setFillColor(238, 242, 246).rect(M, y, tableW, rowH, 'F');
       }
       x = M;
       r.forEach((cell, j) => {
         const c = cols[j];
-        doc.setFont('helvetica', j === 0 ? 'bold' : 'normal');
+        doc.setFont('helvetica', strong[i] || (j === 0 && !roster) ? 'bold' : 'normal');
         const t = fit(cell, c.w - 8);
-        doc.text(t, c.align === 'left' ? x + 4 : x + c.w - 4, y + 12.5, { align: c.align === 'left' ? 'left' : 'right' });
+        doc.text(t, c.align === 'left' ? x + 4 : x + c.w - 4, y + rowH - 5.5, { align: c.align === 'left' ? 'left' : 'right' });
         x += c.w;
       });
       y += rowH;
@@ -79,22 +109,36 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
   // ---- Page 1: header, stats table, goals, penalties.
   header(`generated ${new Date(generatedAt).toLocaleString()}`);
   let y = M + 56;
-  doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(11, 28, 46).text('Unit stats (game)', M, y);
+  doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(11, 28, 46).text(roster ? 'Time on ice by line and player (game)' : 'Unit stats (game)', M, y);
   y += 8;
-  const stats = computeStats(meta.units, events);
+  const rows = statRows(meta, events);
+  const strong = rows.map((r) => r.kind === 'line');
   y = table(
     y,
     [
-      { label: 'Unit', w: 160, align: 'left' }, { label: 'Shifts', w: 55 }, { label: 'TOI', w: 65 }, { label: 'Avg shift', w: 70 },
+      { label: roster ? 'Line / player' : 'Unit', w: 160, align: 'left' }, { label: 'Shifts', w: 55 }, { label: 'TOI', w: 65 }, { label: 'Avg shift', w: 70 },
       { label: 'Longest', w: 65 }, { label: 'Shortest', w: 70 }, { label: 'Avg rest', w: 70 }, { label: 'GF', w: 45 }, { label: 'GA', w: 45 }, { label: '+/-', w: 50 },
     ],
-    stats.map((s) => [
-      name(s.unitId), String(s.shifts), formatClock(s.toiMs), fmt(s.avgMs), fmt(s.longestMs), fmt(s.shortestMs), fmt(s.avgRestMs),
+    rows.map(({ stats: s, ...r }) => [
+      rowLabel({ ...r, stats: s }), String(s.shifts), formatClock(s.toiMs), fmt(s.avgMs), fmt(s.longestMs), fmt(s.shortestMs), fmt(s.avgRestMs),
       String(s.gf), String(s.ga), s.plusMinus > 0 ? `+${s.plusMinus}` : String(s.plusMinus),
     ]),
+    strong,
+    'stats, continued',
   );
+  if (roster && y < H - M - 12) {
+    doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(85, 103, 122);
+    doc.text('Line rows: time a majority of the line was on the ice together (2 of 3 forwards, both D).', M, y + 11);
+    y += 12;
+  }
 
   y += 22;
+  if (y > H - M - 60) {
+    doc.addPage('letter', 'landscape');
+    header('goals');
+    y = M + 60;
+  }
+  doc.setTextColor(11, 28, 46);
   doc.setFont('helvetica', 'bold').setFontSize(13).text('Goals', M, y);
   doc.setFont('helvetica', 'normal').setFontSize(10.5);
   y += 16;
@@ -132,9 +176,15 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
     y += 30;
   }
 
-  const checks = toiCheck(meta.units, events);
+  const checks = toiCheck(trackedUnits(meta), events);
   const periods = checks.map((c) => c.period);
-  const per = periods.map((p) => computeStats(meta.units, events, { period: p }));
+  const per = periods.map((p) => statRows(meta, events, { period: p }));
+  // Roster mode: lots of rows, so TOI by period gets a page of its own.
+  if (roster && y > H * 0.55) {
+    doc.addPage('letter', 'landscape');
+    header('time on ice by period');
+    y = M + 60;
+  }
   const colW = Math.min(80, (W - 2 * M - 170 - 80) / Math.max(periods.length, 1));
   doc.setFont('helvetica', 'bold').setFontSize(13).text('Time on ice by period', M, y);
   y += 8;
@@ -142,11 +192,17 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
     y,
     [{ label: 'Unit', w: 170, align: 'left' }, ...periods.map((p) => ({ label: pl(p), w: colW })), { label: 'Game', w: 80 }],
     [
-      ...stats.map((s, i) => [name(s.unitId), ...per.map((ps) => formatClock(ps[i].toiMs)), formatClock(s.toiMs)]),
+      ...rows.map((r, i) => [rowLabel(r), ...per.map((ps) => formatClock(ps[i].stats.toiMs)), formatClock(r.stats.toiMs)]),
       ['Game clock', ...checks.map((c) => formatClock(c.clockMs)), formatClock(checks.reduce((a, c) => a + c.clockMs, 0))],
     ],
+    [...strong, true],
+    'time on ice by period, continued',
   );
-  if (y < H - M) {
+  if (roster && y < H - M) {
+    const avg = (k: 'F' | 'D') => checks.map((c) => `${pl(c.period)} ${c.clockMs ? (c.sums[k] / c.clockMs).toFixed(2) : '-'}`).join(', ');
+    doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(85, 103, 122);
+    doc.text(`Check, average skaters on ice: forwards ${avg('F')}; defense ${avg('D')} (normally 3 and 2).`, M, Math.min(y + 14, H - M / 2));
+  } else if (y < H - M) {
     const ok = checks.every((c) => c.sums.F === c.clockMs && c.sums.D === c.clockMs);
     doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(85, 103, 122);
     doc.text(

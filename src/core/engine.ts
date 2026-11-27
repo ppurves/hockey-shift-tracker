@@ -4,7 +4,7 @@
 // computed from the last clock event's wall timestamp.
 
 import type { EventBody, GameEvent, Strength, UnitDef } from './types';
-import { exclusionSet } from './units';
+import { exclusionKey } from './units';
 
 export interface ActiveShift {
   startMs: number;
@@ -148,6 +148,8 @@ export function strengthOf(onIce: readonly string[], units: readonly UnitDef[]):
 
 export type Command =
   | { type: 'tapUnit'; unitId: string }
+  /** Roster mode: puts a line's players on (taking every other player of that group off), or off if all are on. */
+  | { type: 'tapLine'; lineId: string }
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'togglePause' }
@@ -197,13 +199,30 @@ export function plan(
       if (state.active[unit.id]) {
         push({ type: 'unitOff', unitId: unit.id });
       } else {
-        const set = exclusionSet(unit.group);
+        const set = exclusionKey(unit);
         for (const other of units) {
-          if (other.id !== unit.id && state.active[other.id] && exclusionSet(other.group) === set) {
+          if (other.id !== unit.id && state.active[other.id] && exclusionKey(other) === set) {
             push({ type: 'unitOff', unitId: other.id });
           }
         }
         push({ type: 'unitOn', unitId: unit.id });
+      }
+      break;
+    }
+    case 'tapLine': {
+      const members = units.filter((u) => u.kind === 'player' && u.lineId === cmd.lineId);
+      if (!members.length) return fail('No players on this line');
+      if (!inLivePeriod) return fail('Start a period first');
+      const group = members[0].group;
+      if (members.every((u) => state.active[u.id])) {
+        for (const u of members) push({ type: 'unitOff', unitId: u.id });
+      } else {
+        for (const u of units) {
+          if (u.kind === 'player' && u.group === group && state.active[u.id] && u.lineId !== cmd.lineId) {
+            push({ type: 'unitOff', unitId: u.id });
+          }
+        }
+        for (const u of members) if (!state.active[u.id]) push({ type: 'unitOn', unitId: u.id });
       }
       break;
     }
@@ -259,9 +278,26 @@ export function undoLast(events: readonly GameEvent[]): { events: GameEvent[]; u
   return { events: events.slice(0, cut), undone: events.slice(cut) };
 }
 
-/** Short human description of an action, for the Undo toast. */
-export function describeTxn(txnEvents: readonly GameEvent[], units: readonly UnitDef[]): string {
+/**
+ * Short human description of an action, for the Undo toast. `lines` (roster
+ * mode) names a line change ("Line 2 on") instead of its first player.
+ */
+export function describeTxn(txnEvents: readonly GameEvent[], units: readonly UnitDef[], lines: readonly UnitDef[] = []): string {
   const name = (id: string) => units.find((u) => u.id === id)?.name ?? id;
+  const ons = txnEvents.filter((e): e is Extract<GameEvent, { type: 'unitOn' }> => e.type === 'unitOn');
+  const offs = txnEvents.filter((e): e is Extract<GameEvent, { type: 'unitOff' }> => e.type === 'unitOff');
+  const lineOf = (id: string) => units.find((u) => u.id === id)?.lineId;
+  const sameLine = (evs: { unitId: string }[]) => {
+    const l = evs.length ? lineOf(evs[0].unitId) : undefined;
+    return l && evs.every((e) => lineOf(e.unitId) === l) ? lines.find((x) => x.id === l)?.name : undefined;
+  };
+  // A player tap is a single event, so a multi-event shift txn is a line tap.
+  if (txnEvents.length > 1 && txnEvents.every((e) => e.type === 'unitOn' || e.type === 'unitOff')) {
+    const on = sameLine(ons);
+    if (on) return `${on} on`;
+    const off = !ons.length ? sameLine(offs) : undefined;
+    if (off) return `${off} off`;
+  }
   const main =
     txnEvents.find((e) => e.type === 'periodStart') ??
     txnEvents.find((e) => e.type === 'periodEnd') ??
@@ -295,6 +331,8 @@ export class GameEngine {
     readonly units: readonly UnitDef[],
     private readonly now: () => number,
     events: readonly GameEvent[] = [],
+    /** Roster mode: the lines players belong to (for Undo labels). */
+    readonly lines: readonly UnitDef[] = [],
   ) {
     this._events = [...events];
     this._state = replay(this._events);
@@ -317,7 +355,7 @@ export class GameEngine {
   /** What Undo would remove, or null if there is nothing to undo. */
   peekUndo(): { label: string; events: GameEvent[] } | null {
     const { undone } = undoLast(this._events);
-    return undone.length ? { label: describeTxn(undone, this.units), events: undone } : null;
+    return undone.length ? { label: describeTxn(undone, this.units, this.lines), events: undone } : null;
   }
 
   undo(): GameEvent[] {

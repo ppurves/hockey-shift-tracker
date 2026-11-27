@@ -1,6 +1,6 @@
 import { LONG_REST_MS, LONG_SHIFT_MS } from './engine';
 import { DEFAULT_PERIOD_MS } from './game';
-import type { UnitDef } from './types';
+import type { Player, TrackMode, UnitDef } from './types';
 import { DEFAULT_UNITS } from './units';
 
 export interface Settings {
@@ -14,6 +14,10 @@ export interface Settings {
   longShiftMs: number;
   /** Inactive line/D tile text turns red when it has been off longer than this. */
   longRestMs: number;
+  /** Tracking mode preselected for new games. */
+  defaultMode: TrackMode;
+  /** Roster copied into each new roster-mode game. */
+  defaultRoster: Player[];
 }
 
 /** Longest value accepted for either alert threshold. */
@@ -28,7 +32,22 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultUnits: DEFAULT_UNITS,
   longShiftMs: LONG_SHIFT_MS,
   longRestMs: LONG_REST_MS,
+  defaultMode: 'lines',
+  defaultRoster: [],
 };
+
+const isPlayer = (p: unknown): p is Player => {
+  const x = p as Partial<Player> | null;
+  return !!x && typeof x.id === 'string' && !!x.id && typeof x.number === 'string' && typeof x.name === 'string' &&
+    (x.position === 'F' || x.position === 'D' || x.position === 'G') && (x.lineId === null || typeof x.lineId === 'string');
+};
+
+/** Keeps the valid players of a stored roster (drops malformed entries and duplicate ids). */
+export function normalizeRoster(raw: unknown): Player[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw.filter((p): p is Player => isPlayer(p) && !seen.has(p.id) && !!seen.add(p.id));
+}
 
 /** Fills missing/invalid fields from defaults (settings saved by older versions). */
 export function normalizeSettings(raw: unknown): Settings {
@@ -41,5 +60,7 @@ export function normalizeSettings(raw: unknown): Settings {
     defaultUnits: Array.isArray(r.defaultUnits) && r.defaultUnits.length ? r.defaultUnits : DEFAULT_UNITS,
     longShiftMs: validThreshold(r.longShiftMs) ? r.longShiftMs : LONG_SHIFT_MS,
     longRestMs: validThreshold(r.longRestMs) ? r.longRestMs : LONG_REST_MS,
+    defaultMode: r.defaultMode === 'roster' ? 'roster' : 'lines',
+    defaultRoster: normalizeRoster(r.defaultRoster),
   };
 }

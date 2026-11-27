@@ -2,7 +2,8 @@
 // fields where needed, and times both as m:ss and as plain seconds.
 
 import { formatClock, formatMaybe } from './format';
-import { computeStats, deriveShifts, shiftMs } from './stats';
+import { isRoster, playerUnits, statRows, unitNamer, type StatRow } from './roster';
+import { deriveShifts, shiftMs } from './stats';
 import type { GameEvent, GameMeta } from './types';
 
 const BOM = '﻿';
@@ -30,38 +31,51 @@ export function fileBase(meta: GameMeta): string {
   return `${meta.date}_vs_${opp}`;
 }
 
-/** Per-unit stats: whole game first, then each period. */
+const ROW_TYPE: Record<StatRow['kind'], string> = { line: 'Line', player: 'Player', unit: 'Unit' };
+
+/**
+ * Per-unit stats: whole game first, then each period. Roster games list each
+ * line followed by its players (with Type, Number and Line columns).
+ */
 export function summaryCsv(meta: GameMeta, events: readonly GameEvent[]): string {
+  const roster = isRoster(meta);
+  const name = unitNamer(meta);
   const scopes: (number | undefined)[] = [undefined, ...periodsOf(events)];
   const rows = scopes.flatMap((period) =>
-    computeStats(meta.units, events, { period }).map((s) => {
-      const u = meta.units.find((x) => x.id === s.unitId)!;
-      return [
-        period === undefined ? 'Game' : `P${period}`, u.name, u.group, s.shifts,
-        formatClock(s.toiMs), secs(s.toiMs), formatMaybe(s.avgMs), secs(s.avgMs),
-        formatMaybe(s.longestMs), secs(s.longestMs), formatMaybe(s.shortestMs), secs(s.shortestMs),
-        formatMaybe(s.avgRestMs), secs(s.avgRestMs),
-        s.gf, s.ga, s.plusMinus,
-      ];
-    }),
+    statRows(meta, events, { period }).map(({ kind, unit: u, stats: s }) => [
+      period === undefined ? 'Game' : `P${period}`,
+      ...(roster ? [ROW_TYPE[kind], u.name, u.number ?? '', u.kind === 'player' ? (u.lineId ? name(u.lineId) : 'Extra') : ''] : [u.name]),
+      u.group, s.shifts,
+      formatClock(s.toiMs), secs(s.toiMs), formatMaybe(s.avgMs), secs(s.avgMs),
+      formatMaybe(s.longestMs), secs(s.longestMs), formatMaybe(s.shortestMs), secs(s.shortestMs),
+      formatMaybe(s.avgRestMs), secs(s.avgRestMs),
+      s.gf, s.ga, s.plusMinus,
+    ]),
   );
-  return toCsv(
-    ['Scope', 'Unit', 'Group', 'Shifts', 'TOI', 'TOI (s)', 'Avg shift', 'Avg (s)', 'Longest', 'Longest (s)', 'Shortest', 'Shortest (s)', 'Avg rest', 'Avg rest (s)', 'GF', 'GA', '+/-'],
-    rows,
-    [1],
-  );
+  const stats = ['Group', 'Shifts', 'TOI', 'TOI (s)', 'Avg shift', 'Avg (s)', 'Longest', 'Longest (s)', 'Shortest', 'Shortest (s)', 'Avg rest', 'Avg rest (s)', 'GF', 'GA', '+/-'];
+  return roster
+    ? toCsv(['Scope', 'Type', 'Unit', 'Number', 'Line', ...stats], rows, [2, 3, 4])
+    : toCsv(['Scope', 'Unit', ...stats], rows, [1]);
 }
 
 export function shiftsCsv(meta: GameMeta, events: readonly GameEvent[]): string {
-  const order = new Map(meta.units.map((u, i) => [u.id, i]));
-  const shifts = deriveShifts(events).sort((a, b) => a.period - b.period || a.startMs - b.startMs || order.get(a.unitId)! - order.get(b.unitId)!);
+  const roster = isRoster(meta);
+  const units = roster ? [...playerUnits(meta), ...meta.units] : meta.units;
+  const name = unitNamer(meta);
+  const order = new Map(units.map((u, i) => [u.id, i]));
+  const rank = (id: string) => order.get(id) ?? units.length;
+  const shifts = deriveShifts(events).sort((a, b) => a.period - b.period || a.startMs - b.startMs || rank(a.unitId) - rank(b.unitId));
+  const times = ['Group', 'Period', 'Start', 'End', 'Duration', 'Start (s)', 'End (s)', 'Duration (s)'];
   return toCsv(
-    ['Unit', 'Group', 'Period', 'Start', 'End', 'Duration', 'Start (s)', 'End (s)', 'Duration (s)'],
+    roster ? ['Unit', 'Number', 'Line', ...times] : ['Unit', ...times],
     shifts.map((s) => {
-      const u = meta.units.find((x) => x.id === s.unitId);
-      return [u?.name ?? s.unitId, u?.group ?? '', s.period, formatClock(s.startMs), formatClock(s.endMs), formatClock(shiftMs(s)), secs(s.startMs), secs(s.endMs), secs(shiftMs(s))];
+      const u = units.find((x) => x.id === s.unitId);
+      const who = roster
+        ? [u?.name ?? s.unitId, u?.number ?? '', u?.kind === 'player' ? (u.lineId ? name(u.lineId) : 'Extra') : '']
+        : [u?.name ?? s.unitId];
+      return [...who, u?.group ?? '', s.period, formatClock(s.startMs), formatClock(s.endMs), formatClock(shiftMs(s)), secs(s.startMs), secs(s.endMs), secs(shiftMs(s))];
     }),
-    [0],
+    roster ? [0, 1, 2] : [0],
   );
 }
 
@@ -72,7 +86,7 @@ const EVENT_LABEL: Partial<Record<GameEvent['type'], string>> = {
 
 /** Goals, penalties, pauses and period boundaries (shift on/off are in shifts.csv). */
 export function eventsCsv(meta: GameMeta, events: readonly GameEvent[]): string {
-  const name = (id: string) => meta.units.find((u) => u.id === id)?.name ?? id;
+  const name = unitNamer(meta);
   return toCsv(
     ['Period', 'Game time', 'Game time (s)', 'Event', 'Strength', 'On ice', 'Wall clock'],
     events
@@ -88,17 +102,18 @@ export function eventsCsv(meta: GameMeta, events: readonly GameEvent[]): string 
 
 /** Plain-text stats table for an email body (mailto fallback, share text). */
 export function summaryText(meta: GameMeta, events: readonly GameEvent[]): string {
-  const stats = computeStats(meta.units, events);
-  const w = Math.max(6, ...meta.units.map((u) => u.name.length));
+  const rows = statRows(meta, events);
+  const label = (r: StatRow) => (r.kind === 'player' ? `  ${r.unit.name}` : r.unit.name);
+  const w = Math.max(6, ...rows.map((r) => label(r).length));
   const pad = (s: string | number, n: number) => String(s).padStart(n);
   const lines = [
     `${meta.date} ${meta.homeAway === 'home' ? 'vs' : '@'} ${meta.opponent}: ${meta.score.for}-${meta.score.against}`,
     '',
     `${'Unit'.padEnd(w)} Shifts   TOI   Avg  GF GA  +/-`,
-    ...stats.map((s) => {
-      const u = meta.units.find((x) => x.id === s.unitId)!;
+    ...rows.map((r) => {
+      const s = r.stats;
       const pm = s.plusMinus > 0 ? `+${s.plusMinus}` : String(s.plusMinus);
-      return `${u.name.padEnd(w)} ${pad(s.shifts, 6)} ${pad(formatClock(s.toiMs), 5)} ${pad(formatMaybe(s.avgMs), 5)} ${pad(s.gf, 3)} ${pad(s.ga, 2)} ${pad(pm, 4)}`;
+      return `${label(r).padEnd(w)} ${pad(s.shifts, 6)} ${pad(formatClock(s.toiMs), 5)} ${pad(formatMaybe(s.avgMs), 5)} ${pad(s.gf, 3)} ${pad(s.ga, 2)} ${pad(pm, 4)}`;
     }),
     '',
     'Sent from Hockey Shift Tracker',

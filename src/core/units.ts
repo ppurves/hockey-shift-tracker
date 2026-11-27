@@ -21,6 +21,14 @@ export function exclusionSet(group: Group): 'F' | 'D' | 'ST' {
   return group === 'PP' || group === 'PK' ? 'ST' : group;
 }
 
+/**
+ * Exclusion key for a unit: units with the same key can't be on together.
+ * Roster players get a key of their own (any number of players can be on).
+ */
+export function exclusionKey(u: Pick<UnitDef, 'id' | 'group' | 'kind'>): string {
+  return u.kind === 'player' ? `player:${u.id}` : exclusionSet(u.group);
+}
+
 const PREFIX: Record<Group, { id: string; name: string }> = {
   F: { id: 'L', name: 'Line' },
   D: { id: 'D', name: 'D' },

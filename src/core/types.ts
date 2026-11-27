@@ -6,6 +6,28 @@ export interface UnitDef {
   id: string;
   name: string;
   group: Group;
+  /** Set on roster players tracked as units (roster mode). Players have no exclusion set. */
+  kind?: 'player';
+  /** Player only: the F line / D pair they're assigned to (null = extra). */
+  lineId?: string | null;
+  /** Player only: jersey number. */
+  number?: string;
+}
+
+/** How a game is tracked: whole lines/pairs, or individual players from a roster. */
+export type TrackMode = 'lines' | 'roster';
+
+/** Skater position. Goalies are on the roster but not tracked on the ice. */
+export type Position = 'F' | 'D' | 'G';
+
+export interface Player {
+  id: string;
+  /** Jersey number as typed (kept as text: "07" and "7" differ to some teams). */
+  number: string;
+  name: string;
+  position: Position;
+  /** F line or D pair unit id, or null for an extra / spare. */
+  lineId: string | null;
 }
 
 export type Strength = 'EV' | 'PP' | 'PK';
@@ -70,7 +92,12 @@ export interface GameMeta {
   date: string;
   homeAway: 'home' | 'away';
   periodLengthMs: number;
+  /** Lines and pairs (and PP/PK units). In roster mode the F/D units are the lines players belong to. */
   units: UnitDef[];
+  /** Missing on games made before roster mode: treat as 'lines'. */
+  mode?: TrackMode;
+  /** Roster mode only. */
+  players?: Player[];
   status: GameStatus;
   score: { for: number; against: number };
   createdAt: number;

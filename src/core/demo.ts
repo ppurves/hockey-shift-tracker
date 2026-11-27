@@ -3,7 +3,8 @@
 
 import { GameEngine, type Command } from './engine';
 import { newGameMeta } from './game';
-import type { GameEvent, GameMeta, UnitDef } from './types';
+import { rosterLines, trackedUnits } from './roster';
+import type { GameEvent, GameMeta, Player, UnitDef } from './types';
 import { DEFAULT_UNITS } from './units';
 
 /** Small seeded PRNG (mulberry32). */
@@ -26,6 +27,18 @@ const INCIDENTS: (Incident | `${Incident}+`)[][] = [
   ['penaltyAgainst', 'goalAgainst+', 'penaltyFor', 'goalFor'],
 ];
 
+/** Demo roster for DEFAULT_UNITS: three lines + an extra forward, two pairs + an extra D, two goalies. */
+export const DEMO_ROSTER: Player[] = [
+  ['9', 'Avery', 'F', 'L1'], ['17', 'Brooks', 'F', 'L1'], ['22', 'Cole', 'F', 'L1'],
+  ['11', 'Diaz', 'F', 'L2'], ['14', 'Ellis', 'F', 'L2'], ['19', 'Fox', 'F', 'L2'],
+  ['8', 'Grant', 'F', 'L3'], ['15', 'Hayes', 'F', 'L3'], ['21', 'Ivers', 'F', 'L3'],
+  ['28', 'Jones', 'F', null],
+  ['2', 'Kerr', 'D', 'D1'], ['4', 'Lowe', 'D', 'D1'],
+  ['5', 'Moss', 'D', 'D2'], ['7', 'Nash', 'D', 'D2'],
+  ['3', 'Ortiz', 'D', null],
+  ['30', 'Price', 'G', null], ['31', 'Quinn', 'G', null],
+].map(([number, name, position, lineId], i) => ({ id: `p${i + 1}`, number, name, position, lineId }) as Player);
+
 export interface DemoGame {
   meta: GameMeta;
   events: GameEvent[];
@@ -39,21 +52,63 @@ export interface DemoGame {
  * Demo convention: "Penalty for" = called for us (on the opponent) → we go on
  * the PP; "Penalty against" = called against us → PK.
  */
-export function generateDemoGame(opts: { id: string; startWall: number; seed?: number; units?: UnitDef[] }): DemoGame {
+export function generateDemoGame(opts: {
+  id: string;
+  startWall: number;
+  seed?: number;
+  units?: UnitDef[];
+  /** Roster mode with this roster (DEMO_ROSTER fits DEFAULT_UNITS). */
+  players?: Player[];
+}): DemoGame {
   const rand = rng(opts.seed ?? 20261121);
   const between = (lo: number, hi: number) => Math.round(lo + rand() * (hi - lo));
   const units = opts.units ?? DEFAULT_UNITS;
+  const meta = newGameMeta(
+    { opponent: 'Demo Hawks', units: [...units], ...(opts.players ? { mode: 'roster' as const, players: opts.players } : {}) },
+    opts.id,
+    opts.startWall,
+  );
+  const roster = !!opts.players;
+  const tracked = trackedUnits(meta);
   const ids = (g: UnitDef['group']) => units.filter((u) => u.group === g).map((u) => u.id);
   const F = ids('F'), D = ids('D'), PP = ids('PP'), PK = ids('PK');
+  const extras = (g: 'F' | 'D') => tracked.filter((u) => u.kind === 'player' && u.group === g && !u.lineId);
   const periodMs = 15 * 60_000;
 
   let wall = opts.startWall;
-  const g = new GameEngine(units, () => wall);
+  const g = new GameEngine(tracked, () => wall, [], rosterLines(meta));
   const run = (cmd: Command) => {
     const r = g.dispatch(cmd);
     if (!r.ok) throw new Error(`demo: ${cmd.type} failed: ${r.reason}`);
   };
-  const tapOn = (id: string | undefined) => { if (id && !g.state.active[id]) run({ type: 'tapUnit', unitId: id }); };
+  const lineIsOn = (id: string) => {
+    const members = tracked.filter((u) => u.lineId === id);
+    return members.length > 0 && members.every((u) => g.state.active[u.id]);
+  };
+  /** Roster: a line change, and now and then the extra skater takes one member's place. */
+  const lineOn = (id: string | undefined) => {
+    if (!id || lineIsOn(id)) return;
+    const group = units.find((u) => u.id === id)!.group as 'F' | 'D';
+    const extra = extras(group)[0];
+    if (extra && rand() < 0.2) {
+      // Send the line out with the extra in place of one player, tapping players one by one.
+      const members = tracked.filter((u) => u.lineId === id);
+      const out = members[Math.floor(rand() * members.length)];
+      const want = new Set([...members.filter((m) => m !== out).map((m) => m.id), extra.id]);
+      for (const u of tracked) {
+        if (u.kind === 'player' && u.group === group && !!g.state.active[u.id] !== want.has(u.id)) run({ type: 'tapUnit', unitId: u.id });
+      }
+    } else {
+      run({ type: 'tapLine', lineId: id });
+    }
+  };
+  const tapOn = (id: string | undefined) => {
+    if (roster && id && units.find((u) => u.id === id)?.group !== 'PP' && units.find((u) => u.id === id)?.group !== 'PK') {
+      lineOn(id);
+      return;
+    }
+    if (id && !g.state.active[id]) run({ type: 'tapUnit', unitId: id });
+  };
   const tapOff = (id: string | undefined) => { if (id && g.state.active[id]) run({ type: 'tapUnit', unitId: id }); };
   const stoppage = (lo = 20, hi = 60) => { wall += between(lo, hi) * 1000; };
 
@@ -134,7 +189,6 @@ export function generateDemoGame(opts: { id: string; startWall: number; seed?: n
     run({ type: 'endPeriod' });
   }
 
-  const meta = newGameMeta({ opponent: 'Demo Hawks', units: [...units] }, opts.id, opts.startWall);
   meta.score = { ...g.state.score };
   meta.status = 'final';
   meta.updatedAt = wall;

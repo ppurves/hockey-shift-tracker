@@ -1,4 +1,5 @@
-import type { GameMeta, UnitDef } from './types';
+import { sanitizeRoster } from './roster';
+import type { GameMeta, Player, TrackMode, UnitDef } from './types';
 import { DEFAULT_UNITS } from './units';
 
 export const DEFAULT_PERIOD_MS = 15 * 60_000;
@@ -16,16 +17,23 @@ export interface NewGameInput {
   homeAway?: 'home' | 'away';
   periodLengthMs?: number;
   units?: UnitDef[];
+  mode?: TrackMode;
+  /** Roster mode only. */
+  players?: Player[];
 }
 
 export function newGameMeta(input: NewGameInput, id: string, now: number): GameMeta {
+  const units = (input.units ?? DEFAULT_UNITS).map((u) => ({ ...u }));
+  const roster = input.mode === 'roster';
   return {
     id,
     opponent: input.opponent.trim() || 'Opponent',
     date: input.date || isoDate(now),
     homeAway: input.homeAway ?? 'home',
     periodLengthMs: input.periodLengthMs && input.periodLengthMs > 0 ? input.periodLengthMs : DEFAULT_PERIOD_MS,
-    units: (input.units ?? DEFAULT_UNITS).map((u) => ({ ...u })),
+    units,
+    mode: roster ? 'roster' : 'lines',
+    ...(roster ? { players: sanitizeRoster(input.players ?? [], units).map((p) => ({ ...p })) } : {}),
     status: 'live',
     score: { for: 0, against: 0 },
     createdAt: now,

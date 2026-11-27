@@ -7,6 +7,7 @@ import {
   shiftsCsv,
   summaryCsv,
   summaryText,
+  reportView,
   timelineSvg,
   type GameEvent,
   type GameMeta,
@@ -45,7 +46,8 @@ export async function svgToPng(svg: string, width: number, height: number, scale
 export async function prepareExport(meta: GameMeta, events: readonly GameEvent[]): Promise<PreparedExport> {
   const base = fileBase(meta);
   const csv = (name: string, body: string) => new File([body], `${base}_${name}.csv`, { type: 'text/csv' });
-  const tl = timelineSvg({ units: meta.units, events, period: 'all', periodLengthMs: meta.periodLengthMs, width: 1400, theme: 'light' });
+  const view = reportView(meta, events);
+  const tl = timelineSvg({ units: view.units, events: view.events, period: 'all', periodLengthMs: meta.periodLengthMs, width: 1400, theme: 'light' });
   const timeline = await svgToPng(tl.svg, tl.width, tl.height).catch(() => null);
   const { buildPdf } = await import('./pdf'); // jsPDF is loaded only when exporting
   const pdf = buildPdf({ meta, events, timeline, generatedAt: Date.now() });
