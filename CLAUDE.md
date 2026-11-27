@@ -81,6 +81,18 @@ TypeScript, Vite, React, vite-plugin-pwa (Workbox, `registerType: 'prompt'`), In
 - Validation: the end must be after the start, times must be within the period, and shifts can't overlap within an exclusion set (F, D, or PP+PK). Added events get `wallTs: 0`.
 - Saving goes through `session.replaceLog` → `replaceEvents`, which writes the events and the game score in one transaction.
 
+## Roster mode (core/roster.ts, components/RosterEditor.tsx)
+- `GameMeta.mode` is `'lines'` (the default, and what older games have) or `'roster'`. A roster game also has `players: Player[]`, where each player is `{id, number, name, position F|D|G, lineId | null}`. Ids are `p1`, `p2`, and so on (`nextPlayerId`). `lineId` points to an F line or a D pair in `meta.units`, and `null` means an extra.
+- Players are tracked as units: `trackedUnits(meta)` returns the player `UnitDef`s (`kind: 'player'`, group F/D, `lineId`, `number`) followed by the PP/PK units. Goalies are listed on the roster but not tracked. The engine, `deriveShifts`, `computeStats`, the timeline and the edit functions all receive `trackedUnits` (`engine.units`), **not** `meta.units`.
+- `exclusionKey(unit)`: each player gets a key of their own, so any number of players can be on at once. Lines and units still use `exclusionSet`.
+- `tapLine {lineId}`: if every player on the line is already on, it takes them all off. Otherwise it takes every other player in that group off (extras included) and puts on the line's players who are off. All of it is one txn, and Undo shows "Line 2 on".
+- Lines are derived and never stored: a line is "on" while `lineThreshold(n) = floor(n/2)+1` of its players are on. `withLineEvents` adds synthetic unitOn/unitOff events for each line, and adds the lines that were on to each goal's `onIce`. If a line goes off and back on at the same game time, it keeps one shift.
+- `reportView(meta, events)` gives the rows (each line, then its players, then extras, then PP/PK) and the augmented events. `statRows` gives `{kind: line|player|unit, unit, stats}`. The Summary, CSV, text summary, PDF and timeline all use these. Name any id with `unitNamer(meta)`.
+- Capture in roster mode: each line gets a row with the line tile first, then that line's players. Extras get their own row, then special teams. Everything sits on one shared column grid (`--cols`).
+- In roster mode the TOI check shows average skaters on the ice (F TOI ÷ clock ≈ 3, D ≈ 2).
+- CSVs: roster games add `Type, Number, Line` columns to summary.csv and `Number, Line` to shifts.csv. The PDF table runs onto extra pages as needed, so a roster PDF has 3 or more pages.
+- Settings has `defaultMode` and `defaultRoster`, and New Game copies both. The roster can only be edited per game at creation time, not during a live game. Backup is version 2, and version 1 files still restore.
+
 ## Settings
 Stored in the IndexedDB `settings` store:
 - `recipientEmail`
@@ -108,7 +120,7 @@ Push to main → Pages deploys in ~2 min. The app checks for a new service worke
 - No haptics on iOS: instant visual press state + optional audio tick (setting, off by default).
 
 ## Domain rules (must be exactly right)
-Units are data (array), groups: **F** (Line 1–3), **D** (D 1–2), **PP** (PP 1–2), **PK** (PK 1–2).
+Units are data (array), groups: **F** (Line 1–3), **D** (D 1–2), **PP** (PP 1–2), **PK** (PK 1–2). Roster mode tracks individual players instead of F/D units (see "Roster mode").
 - Max one active unit per group. **PP and PK are mutually exclusive**: tapping a PK while a PP is on closes the PP first, and the reverse also applies (one "special teams" exclusion set).
 - F, D, and special teams run independently and concurrently. PP/PK never auto-clear F/D lines (v1).
 - Tap inactive unit → on (closes the other active unit in its exclusion set at the same timestamp). Tap active → off.
@@ -136,4 +148,4 @@ Events and stats:
 Export: summary.csv, shifts.csv, events.csv, PDF (header + stats + timeline PNG). Web Share with files → fallbacks: download + mailto (text, no attachments, and the UI says so). Always tell the user which path was used. Filenames `YYYY-MM-DD_vs_Opponent_*`.
 
 ## Working agreement
-Milestones M0–M5. After each one: build, test, commit, deploy, then stop with a 5-line summary and wait for "next". Small commits. Flag iOS limitations instead of silently changing requirements.
+Milestones M0–M5, then M6 (roster mode) and M7 (penalty timer). After each one: build, test, commit, deploy, then stop with a 5-line summary and wait for "next". Small commits. Flag iOS limitations instead of silently changing requirements.

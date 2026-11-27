@@ -6,6 +6,7 @@ Offline-first iPhone web app (PWA) for tracking hockey line shifts and time on i
 
 - Live capture: one-tap line changes, Pause All, goals/penalties (auto-pause), Undo.
 - Summary: per-unit stats and a shift timeline per period.
+- Roster mode (optional): track individual players by number. Tap a line to change the whole line, or tap a number to swap one player. Reports show time on ice per player, grouped under each line.
 - Export: PDF report + CSVs via the share sheet (Mail), with download/mailto fallbacks.
 - All data stays on the phone. Use Settings → Back up to keep a copy.
 
