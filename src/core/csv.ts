@@ -3,6 +3,7 @@
 
 import { formatClock, formatMaybe } from './format';
 import { isRoster, playerUnits, statRows, unitNamer, type StatRow } from './roster';
+import { derivePenalties, penaltyEndText, penaltyPlayer } from './penalties';
 import { deriveShifts, shiftMs } from './stats';
 import type { GameEvent, GameMeta } from './types';
 
@@ -82,21 +83,37 @@ export function shiftsCsv(meta: GameMeta, events: readonly GameEvent[]): string 
 const EVENT_LABEL: Partial<Record<GameEvent['type'], string>> = {
   periodStart: 'Period start', periodEnd: 'Period end', pause: 'Pause', resume: 'Resume',
   goalFor: 'Goal for', goalAgainst: 'Goal against', penaltyFor: 'Penalty for', penaltyAgainst: 'Penalty against',
+  penaltyEnd: 'Penalty end',
 };
 
-/** Goals, penalties, pauses and period boundaries (shift on/off are in shifts.csv). */
+/**
+ * Goals, penalties (with player, length and how they ended), penalty ends,
+ * pauses and period boundaries (shift on/off are in shifts.csv).
+ */
 export function eventsCsv(meta: GameMeta, events: readonly GameEvent[]): string {
   const name = unitNamer(meta);
+  const pens = new Map(derivePenalties(events).map((p) => [p.ref, p]));
   return toCsv(
-    ['Period', 'Game time', 'Game time (s)', 'Event', 'Strength', 'On ice', 'Wall clock'],
+    ['Period', 'Game time', 'Game time (s)', 'Event', 'Strength', 'On ice', 'Wall clock', 'Player', 'Penalty length', 'Penalty result'],
     events
       .filter((e) => EVENT_LABEL[e.type])
-      .map((e) => [
-        e.period, formatClock(e.gameMs), secs(e.gameMs), EVENT_LABEL[e.type]!,
-        'strength' in e ? e.strength : '', 'onIce' in e ? e.onIce.map(name).join('; ') : '',
-        e.wallTs ? new Date(e.wallTs).toISOString() : '',
-      ]),
-    [5],
+      .map((e) => {
+        const pen = e.type === 'penaltyFor' || e.type === 'penaltyAgainst' ? pens.get(e.txn)
+          : e.type === 'penaltyEnd' ? pens.get(e.ref) : undefined;
+        const label = e.type === 'penaltyEnd'
+          ? `Penalty end (${e.reason === 'expired' ? 'time served' : e.reason === 'goal' ? 'goal' : 'ended early'})`
+          : EVENT_LABEL[e.type]!;
+        const isCall = e.type === 'penaltyFor' || e.type === 'penaltyAgainst';
+        return [
+          e.period, formatClock(e.gameMs), secs(e.gameMs), label,
+          'strength' in e ? e.strength : '', 'onIce' in e ? e.onIce.map(name).join('; ') : '',
+          e.wallTs ? new Date(e.wallTs).toISOString() : '',
+          pen ? penaltyPlayer(pen, name) : '',
+          isCall && pen?.lengthMs ? formatClock(pen.lengthMs) : '',
+          isCall && pen ? penaltyEndText(pen) : '',
+        ];
+      }),
+    [5, 7],
   );
 }
 
@@ -115,8 +132,26 @@ export function summaryText(meta: GameMeta, events: readonly GameEvent[]): strin
       const pm = s.plusMinus > 0 ? `+${s.plusMinus}` : String(s.plusMinus);
       return `${label(r).padEnd(w)} ${pad(s.shifts, 6)} ${pad(formatClock(s.toiMs), 5)} ${pad(formatMaybe(s.avgMs), 5)} ${pad(s.gf, 3)} ${pad(s.ga, 2)} ${pad(pm, 4)}`;
     }),
+    ...penaltyLines(meta, events),
     '',
     'Sent from Hockey Shift Tracker',
   ];
   return lines.join('\n');
+}
+
+/** "Penalties:" block for the text summary (empty when there were none). */
+function penaltyLines(meta: GameMeta, events: readonly GameEvent[]): string[] {
+  const name = unitNamer(meta);
+  const pens = derivePenalties(events);
+  if (!pens.length) return [];
+  return [
+    '',
+    'Penalties:',
+    ...pens.map((p) => {
+      const who = penaltyPlayer(p, name);
+      const len = p.lengthMs ? ` ${formatClock(p.lengthMs)}` : '';
+      const end = penaltyEndText(p);
+      return `  P${p.period} ${formatClock(p.gameMs)} ${p.side === 'for' ? 'for (PP)' : 'against (PK)'}${who ? ` ${who}` : ''}${len}${end ? `, ${end}` : ''}`;
+    }),
+  ];
 }

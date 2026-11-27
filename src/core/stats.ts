@@ -58,11 +58,7 @@ export function computeStats(
   const all = deriveShifts(events, opts.liveGameMs);
   const shifts = all.filter((s) => opts.period === undefined || s.period === opts.period);
   // Game-clock offset of each period, so rest can span a period break.
-  const lengths = periodLengths(events);
-  const started = [...new Set(events.filter((e) => e.type === 'periodStart').map((e) => e.period))].sort((a, b) => a - b);
-  const offset: Record<number, number> = {};
-  let acc = 0;
-  for (const p of started) { offset[p] = acc; acc += lengths[p] ?? 0; }
+  const offset = periodOffsets(events);
   const abs = (period: number, ms: number) => (offset[period] ?? 0) + ms;
   const goals = events.filter(
     (e): e is Extract<GameEvent, { type: 'goalFor' | 'goalAgainst' }> =>
@@ -97,6 +93,16 @@ export function computeStats(
   });
 }
 
+/** Game-clock time (across periods) at which each started period began. */
+export function periodOffsets(events: readonly GameEvent[]): Record<number, number> {
+  const lengths = periodLengths(events);
+  const started = [...new Set(events.filter((e) => e.type === 'periodStart').map((e) => e.period))].sort((a, b) => a - b);
+  const offset: Record<number, number> = {};
+  let acc = 0;
+  for (const p of started) { offset[p] = acc; acc += lengths[p] ?? 0; }
+  return offset;
+}
+
 /** Final game-clock length of each completed period (from its periodEnd event). */
 export function periodLengths(events: readonly GameEvent[]): Record<number, number> {
   const out: Record<number, number> = {};
@@ -123,7 +129,7 @@ export function toiCheck(units: readonly UnitDef[], events: readonly GameEvent[]
   const shifts = deriveShifts(events, liveGameMs);
   const setOf = (id: string) => {
     const g = units.find((u) => u.id === id)?.group;
-    return g === 'PP' || g === 'PK' ? 'ST' : g;
+    return g === 'PP' || g === 'PK' ? 'ST' : g === 'F' || g === 'D' ? g : null;
   };
   return started.map((period) => {
     const sums = { F: 0, D: 0, ST: 0 };

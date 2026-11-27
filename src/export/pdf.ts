@@ -4,7 +4,11 @@
 
 import { jsPDF } from 'jspdf';
 import {
+  conditionTotals,
+  derivePenalties,
   formatClock,
+  penaltyEndText,
+  penaltyPlayer,
   isRoster,
   statRows,
   toiCheck,
@@ -153,11 +157,30 @@ export function buildPdf({ meta, events, timeline, generatedAt, compress = true 
     );
     y += 14;
   }
-  const pf = events.filter((e) => e.type === 'penaltyFor').length;
-  const pa = events.filter((e) => e.type === 'penaltyAgainst').length;
-  if (y < H - M - 10) {
-    y += 8;
-    doc.setFont('helvetica', 'bold').text(`Penalties: ${pf} for, ${pa} against`, M, y);
+  // Penalties: each call with who is in the box, length and how it ended.
+  const pens = derivePenalties(events);
+  const totals = conditionTotals(pens);
+  y += 10;
+  if (y > H - M - 40) {
+    doc.addPage('letter', 'landscape');
+    header('penalties');
+    y = M + 60;
+  }
+  doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(11, 28, 46).text('Penalties', M, y);
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(85, 103, 122);
+  doc.text(`Power play ${formatClock(totals.PP)}  |  Penalty kill ${formatClock(totals.PK)}${totals.EVEN ? `  |  4-on-4 ${formatClock(totals.EVEN)}` : ''}`, M + 80, y);
+  doc.setFontSize(10.5).setTextColor(11, 28, 46);
+  y += 16;
+  if (!pens.length) { doc.text('None.', M, y); y += 14; }
+  for (const p of pens) {
+    if (y > H - M - 6) { doc.text('(more penalties in events.csv)', M, y); break; }
+    const who = penaltyPlayer(p, name);
+    doc.setFont('helvetica', 'bold').text(p.side === 'for' ? 'FOR (PP)' : 'AGAINST (PK)', M, y);
+    doc.setFont('helvetica', 'normal').text(
+      fit(`${pl(p.period)} ${formatClock(p.gameMs)}${who ? `   ${who}` : ''}${p.lengthMs ? `   ${formatClock(p.lengthMs)}` : ''}${p.end ? `   ${penaltyEndText(p)}` : ''}`, W - 2 * M - 90),
+      M + 90, y,
+    );
+    y += 14;
   }
 
   // ---- Page 2: timeline + TOI by period + sanity check.

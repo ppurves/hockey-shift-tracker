@@ -37,7 +37,7 @@ describe('csv', () => {
     expect(csv.startsWith('﻿')).toBe(true);
     const lines = parse(csv);
     expect(lines[0]).toBe('Scope,Unit,Group,Shifts,TOI,TOI (s),Avg shift,Avg (s),Longest,Longest (s),Shortest,Shortest (s),Avg rest,Avg rest (s),GF,GA,+/-');
-    expect(lines).toHaveLength(1 + 9 * 4);
+    expect(lines).toHaveLength(1 + 5 * 4);
     const l1 = computeStats(demo.meta.units, demo.events).find((s) => s.unitId === 'L1')!;
     expect(lines[1].split(',').slice(0, 4)).toEqual(['Game', 'Line 1', 'F', String(l1.shifts)]);
     expect(lines[1].split(',')[5]).toBe(String(Math.round(l1.toiMs / 1000)));
@@ -56,7 +56,7 @@ describe('csv', () => {
   it('summary text has score and one line per unit', () => {
     const t = summaryText(demo.meta, demo.events);
     expect(t).toContain('vs Demo Hawks: 4-2');
-    expect(t.split('\n').filter((l) => /^(Line|D|PP|PK) \d/.test(l))).toHaveLength(9);
+    expect(t.split('\n').filter((l) => /^(Line|D|PP|PK) \d/.test(l))).toHaveLength(5);
   });
 });
 

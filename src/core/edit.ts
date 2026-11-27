@@ -46,7 +46,7 @@ function rebuild(units: readonly UnitDef[], items: Item[]): GameEvent[] {
     let out: GameEvent = { ...e, seq };
     if (out.type === 'goalFor' || out.type === 'goalAgainst') {
       const onIce = units.filter((u) => state.active[u.id]).map((u) => u.id);
-      out = { ...out, onIce, strength: strengthOf(onIce, units) };
+      out = { ...out, onIce, strength: strengthOf(onIce, units, state) };
     }
     state = reduce(state, out);
     return out;
@@ -157,22 +157,36 @@ export function addShift(
 
 type Marker = 'goalFor' | 'goalAgainst' | 'penaltyFor' | 'penaltyAgainst';
 
-/** Adds a missed goal or penalty. Goals are credited to the units on ice at that time. */
-export function addMarker(units: readonly UnitDef[], events: readonly GameEvent[], type: Marker, period: number, gameMs: number): EditResult {
+/**
+ * Adds a missed goal or penalty. Goals are credited to the units on ice at
+ * that time. A penalty with `lengthMs` runs its full length (no early end).
+ */
+export function addMarker(
+  units: readonly UnitDef[],
+  events: readonly GameEvent[],
+  type: Marker,
+  period: number,
+  gameMs: number,
+  lengthMs?: number,
+): EditResult {
   const end = periodEndMs(events, period);
   if (end === null) return { ok: false, reason: `Period ${period} was not played.` };
   if (gameMs < 0 || gameMs > end) return { ok: false, reason: `Time must be within 0:00 and ${formatClock(end)}.` };
-  const body: EventBody = type === 'goalFor' || type === 'goalAgainst' ? { type, onIce: [], strength: 'EV' } : { type };
+  const body: EventBody = type === 'goalFor' || type === 'goalAgainst'
+    ? { type, onIce: [], strength: 'EV' }
+    : { type, ...(lengthMs && lengthMs > 0 ? { lengthMs } : {}) };
   const items = itemsOf(events);
   items.push({ e: makeEvent(body, period, gameMs, nextTxn(events)), idx: events.length, place: 'last' });
   return { ok: true, events: rebuild(units, items) };
 }
 
-/** Deletes a goal or penalty by seq. Clock and shift events can't be deleted here. */
+/** Deletes a goal or penalty by seq (with a penalty's details and end). Clock and shift events can't be deleted here. */
 export function deleteMarker(units: readonly UnitDef[], events: readonly GameEvent[], seq: number): EditResult {
   const e = events.find((x) => x.seq === seq);
   if (!e || !['goalFor', 'goalAgainst', 'penaltyFor', 'penaltyAgainst'].includes(e.type)) {
     return { ok: false, reason: 'Only goals and penalties can be deleted here.' };
   }
-  return { ok: true, events: rebuild(units, itemsOf(events).filter((it) => it.e.seq !== seq)) };
+  const isPenalty = e.type === 'penaltyFor' || e.type === 'penaltyAgainst';
+  const dependent = (x: GameEvent) => isPenalty && (x.type === 'penaltyInfo' || x.type === 'penaltyEnd') && x.ref === e.txn;
+  return { ok: true, events: rebuild(units, itemsOf(events).filter((it) => it.e.seq !== seq && !dependent(it.e))) };
 }

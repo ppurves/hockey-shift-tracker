@@ -1,6 +1,11 @@
 // Domain types. Pure TypeScript: no React or DOM imports anywhere in src/core.
 
-export type Group = 'F' | 'D' | 'PP' | 'PK';
+/**
+ * F lines, D pairs, goalies (roster players only), and PP/PK units. PP/PK
+ * units are legacy: new games track power plays and penalty kills as game
+ * conditions derived from timed penalties.
+ */
+export type Group = 'F' | 'D' | 'G' | 'PP' | 'PK';
 
 export interface UnitDef {
   id: string;
@@ -43,7 +48,12 @@ export interface EventBase {
   gameMs: number;
   /** Wall-clock timestamp (Date.now()) when the event was recorded. */
   wallTs: number;
+  /** Written by the app itself (a penalty expiring), not by a tap. Undo skips these. */
+  auto?: true;
 }
+
+export type PenaltySide = 'for' | 'against';
+export type PenaltyEndReason = 'expired' | 'goal' | 'manual';
 
 export type EventBody =
   | { type: 'periodStart' }
@@ -53,7 +63,19 @@ export type EventBody =
   | { type: 'unitOn'; unitId: string }
   | { type: 'unitOff'; unitId: string }
   | { type: 'goalFor' | 'goalAgainst'; onIce: string[]; strength: Strength }
-  | { type: 'penaltyFor' | 'penaltyAgainst' };
+  | {
+      type: 'penaltyFor' | 'penaltyAgainst';
+      /** Penalty time on the game clock. Missing on penalties logged before M7 (marker only). */
+      lengthMs?: number;
+      /** Roster mode: the penalized player (penalty against). */
+      playerId?: string;
+      /** Lines mode: the penalized player's number, as typed. */
+      number?: string;
+    }
+  /** Sets the player and/or length of the penalty logged in txn `ref`. null clears the player. */
+  | { type: 'penaltyInfo'; ref: number; playerId?: string | null; number?: string | null; lengthMs?: number }
+  /** Ends the penalty logged in txn `ref`. */
+  | { type: 'penaltyEnd'; ref: number; reason: PenaltyEndReason };
 
 export type GameEvent = EventBase & EventBody;
 export type EventType = GameEvent['type'];

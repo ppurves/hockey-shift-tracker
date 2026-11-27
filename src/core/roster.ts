@@ -8,7 +8,7 @@ import type { GameEvent, GameMeta, Player, Position, UnitDef, UnitStats } from '
 
 export const isRoster = (meta: Pick<GameMeta, 'mode'>): boolean => meta.mode === 'roster';
 
-/** Tracked group for a position; goalies aren't tracked. */
+/** Line group for a position; goalies have no line. */
 export const positionGroup = (p: Position): 'F' | 'D' | null => (p === 'G' ? null : p);
 
 /** "#12 Smith", "#12" or "Smith". */
@@ -51,28 +51,27 @@ export function rosterLines(meta: Pick<GameMeta, 'units'>): UnitDef[] {
 }
 
 /**
- * Skaters as trackable units, ordered by line (in the game's line order) and
- * jersey number within a line; extras (no line) come last, forwards first.
+ * Players as trackable units, ordered by line (in the game's line order) and
+ * jersey number within a line; then extras (forwards first), then goalies.
  */
 export function playerUnits(meta: Pick<GameMeta, 'units' | 'players'>): UnitDef[] {
   const players = sanitizeRoster(meta.players ?? [], meta.units);
   const lineOrder = new Map(rosterLines(meta).map((u, i) => [u.id, i]));
   const rank = (p: Player) =>
-    p.lineId !== null ? lineOrder.get(p.lineId)! : 1000 + (p.position === 'F' ? 0 : 1);
+    p.lineId !== null ? lineOrder.get(p.lineId)! : 1000 + ['F', 'D', 'G'].indexOf(p.position);
   return players
-    .filter((p) => positionGroup(p.position) !== null)
     .sort((a, b) => rank(a) - rank(b) || byNumber(a, b))
     .map((p) => ({
       id: p.id,
       name: playerLabel(p),
-      group: positionGroup(p.position)!,
+      group: p.position,
       kind: 'player' as const,
       lineId: p.lineId,
       number: p.number.trim(),
     }));
 }
 
-/** The units the engine tracks: lines mode → meta.units; roster mode → players + PP/PK units. */
+/** The units the engine tracks: lines mode → meta.units; roster mode → players (incl. goalies) + any legacy PP/PK units. */
 export function trackedUnits(meta: Pick<GameMeta, 'mode' | 'units' | 'players'>): UnitDef[] {
   if (!isRoster(meta)) return meta.units;
   return [...playerUnits(meta), ...meta.units.filter((u) => u.group === 'PP' || u.group === 'PK')];

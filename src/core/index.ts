@@ -14,3 +14,4 @@ export * from './settings';
 export * from './backup';
 export * from './edit';
 export * from './roster';
+export * from './penalties';

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  DEFAULT_UNITS,
+  LEGACY_UNITS,
   GameEngine,
   computeStats,
   deriveShifts,
@@ -22,7 +22,7 @@ const now = () => wall;
 const advance = (ms: number) => { wall += ms; };
 
 function newGame(events: GameEvent[] = []) {
-  return new GameEngine(DEFAULT_UNITS, now, events);
+  return new GameEngine(LEGACY_UNITS, now, events);
 }
 function run(g: GameEngine, ...cmds: Command[]) {
   for (const c of cmds) {
@@ -39,7 +39,7 @@ function startedGame() {
 }
 const statFor = (stats: UnitStats[], id: string) => stats.find((s) => s.unitId === id)!;
 const live = (g: GameEngine, period?: number) =>
-  computeStats(DEFAULT_UNITS, g.events, { liveGameMs: g.gameMs(), period });
+  computeStats(LEGACY_UNITS, g.events, { liveGameMs: g.gameMs(), period });
 
 beforeEach(() => { wall = 1_763_700_000_000; });
 
@@ -65,7 +65,7 @@ describe('shifts', () => {
     run(g, tap('L1'));
     const shifts = deriveShifts(g.events);
     expect(shifts).toEqual([{ unitId: 'L1', period: 1, startMs: 1 * MIN, endMs: 1 * MIN + 45 * SEC, open: false }]);
-    const s = statFor(computeStats(DEFAULT_UNITS, g.events), 'L1');
+    const s = statFor(computeStats(LEGACY_UNITS, g.events), 'L1');
     expect(s.shifts).toBe(1);
     expect(s.toiMs).toBe(45 * SEC);
     expect(formatMaybe(s.avgMs)).toBe('0:45');
@@ -83,7 +83,7 @@ describe('shifts', () => {
     run(g, { type: 'resume' });
     advance(15 * SEC);
     run(g, tap('L1'));
-    const s = statFor(computeStats(DEFAULT_UNITS, g.events), 'L1');
+    const s = statFor(computeStats(LEGACY_UNITS, g.events), 'L1');
     expect(s.shifts).toBe(1);
     expect(s.toiMs).toBe(45 * SEC);
   });
@@ -190,7 +190,7 @@ describe('goals and +/-', () => {
     expect(goals.map((e) => 'strength' in e && e.strength)).toEqual(['EV', 'PK', 'PP']);
     expect(g.state.score).toEqual({ for: 2, against: 1 });
 
-    const st = computeStats(DEFAULT_UNITS, g.events, { liveGameMs: g.gameMs() });
+    const st = computeStats(LEGACY_UNITS, g.events, { liveGameMs: g.gameMs() });
     expect(statFor(st, 'L1')).toMatchObject({ gf: 1, ga: 0, plusMinus: 1 });
     expect(statFor(st, 'L2')).toMatchObject({ gf: 1, ga: 1, plusMinus: 0 });
     expect(statFor(st, 'D1')).toMatchObject({ gf: 2, ga: 1, plusMinus: 1 });
@@ -303,8 +303,8 @@ describe('undo', () => {
 describe('zero-shift units', () => {
   it('no crash, averages are null and show "—"', () => {
     const g = newGame();
-    const st = computeStats(DEFAULT_UNITS, g.events);
-    expect(st).toHaveLength(DEFAULT_UNITS.length);
+    const st = computeStats(LEGACY_UNITS, g.events);
+    expect(st).toHaveLength(LEGACY_UNITS.length);
     for (const s of st) {
       expect(s).toMatchObject({ shifts: 0, toiMs: 0, avgMs: null, longestMs: null, shortestMs: null });
       expect(formatMaybe(s.avgMs)).toBe('—');
@@ -319,7 +319,7 @@ describe('zero-shift units', () => {
       run(g, tap('L3'));
       advance(10 * SEC);
     }
-    expect(statFor(computeStats(DEFAULT_UNITS, g.events), 'L3')).toMatchObject({
+    expect(statFor(computeStats(LEGACY_UNITS, g.events), 'L3')).toMatchObject({
       shifts: 3, toiMs: 120 * SEC, avgMs: 40 * SEC, longestMs: 50 * SEC, shortestMs: 30 * SEC,
     });
   });
@@ -398,7 +398,7 @@ describe('sanity: per-group TOI vs game clock', () => {
     advance(60 * SEC);
     run(g, { type: 'endPeriod' });
     const len = periodLengths(g.events)[1];
-    const st = computeStats(DEFAULT_UNITS, g.events);
+    const st = computeStats(LEGACY_UNITS, g.events);
     const sum = (ids: string[]) => ids.reduce((a, id) => a + statFor(st, id).toiMs, 0);
     expect(sum(['L1', 'L2', 'L3'])).toBe(len);
     expect(sum(['D1', 'D2'])).toBe(len);
@@ -439,10 +439,10 @@ describe('rest (time since last shift)', () => {
     run(g, { type: 'startPeriod', period: 2 }, { type: 'resume' });
     advance(2 * MIN);
     run(g, tap('L1')); // rest 1:00 of P1 + 2:00 of P2 = 3:00
-    const game = statFor(computeStats(DEFAULT_UNITS, g.events, { liveGameMs: g.gameMs() }), 'L1');
+    const game = statFor(computeStats(LEGACY_UNITS, g.events, { liveGameMs: g.gameMs() }), 'L1');
     expect(game.avgRestMs).toBe(2.5 * MIN);
-    const p2 = statFor(computeStats(DEFAULT_UNITS, g.events, { period: 2, liveGameMs: g.gameMs() }), 'L1');
+    const p2 = statFor(computeStats(LEGACY_UNITS, g.events, { period: 2, liveGameMs: g.gameMs() }), 'L1');
     expect(p2.avgRestMs).toBe(3 * MIN);
-    expect(statFor(computeStats(DEFAULT_UNITS, g.events), 'L3').avgRestMs).toBeNull();
+    expect(statFor(computeStats(LEGACY_UNITS, g.events), 'L3').avgRestMs).toBeNull();
   });
 });

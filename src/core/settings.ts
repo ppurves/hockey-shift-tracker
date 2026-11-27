@@ -14,13 +14,18 @@ export interface Settings {
   longShiftMs: number;
   /** Inactive line/D tile text turns red when it has been off longer than this. */
   longRestMs: number;
+  /** Length of a new penalty (power play / penalty kill) on the game clock. */
+  defaultPenaltyMs: number;
   /** Tracking mode preselected for new games. */
   defaultMode: TrackMode;
   /** Roster copied into each new roster-mode game. */
   defaultRoster: Player[];
 }
 
-/** Longest value accepted for either alert threshold. */
+/** A minor: 2:00. */
+export const DEFAULT_PENALTY_MS = 2 * 60_000;
+
+/** Longest value accepted for the alert thresholds and penalty length. */
 export const MAX_THRESHOLD_MS = 60 * 60_000;
 const validThreshold = (v: unknown): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= MAX_THRESHOLD_MS;
@@ -34,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   longRestMs: LONG_REST_MS,
   defaultMode: 'lines',
   defaultRoster: [],
+  defaultPenaltyMs: DEFAULT_PENALTY_MS,
 };
 
 const isPlayer = (p: unknown): p is Player => {
@@ -57,7 +63,11 @@ export function normalizeSettings(raw: unknown): Settings {
     defaultPeriodLengthMs:
       typeof r.defaultPeriodLengthMs === 'number' && r.defaultPeriodLengthMs > 0 ? r.defaultPeriodLengthMs : DEFAULT_PERIOD_MS,
     audioTick: r.audioTick === true,
-    defaultUnits: Array.isArray(r.defaultUnits) && r.defaultUnits.length ? r.defaultUnits : DEFAULT_UNITS,
+    // PP/PK units from before M7 are dropped: they're game conditions now.
+    defaultUnits: Array.isArray(r.defaultUnits) && r.defaultUnits.some((u) => u?.group === 'F')
+      ? r.defaultUnits.filter((u) => u.group === 'F' || u.group === 'D')
+      : DEFAULT_UNITS,
+    defaultPenaltyMs: validThreshold(r.defaultPenaltyMs) ? r.defaultPenaltyMs : DEFAULT_PENALTY_MS,
     longShiftMs: validThreshold(r.longShiftMs) ? r.longShiftMs : LONG_SHIFT_MS,
     longRestMs: validThreshold(r.longRestMs) ? r.longRestMs : LONG_REST_MS,
     defaultMode: r.defaultMode === 'roster' ? 'roster' : 'lines',

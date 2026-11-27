@@ -4,8 +4,8 @@ import { normalizeRoster, normalizeSettings, type Settings } from './settings';
 import type { GameEvent, GameMeta } from './types';
 
 export const BACKUP_APP = 'hockey-shift-tracker';
-/** 2: roster-mode games (mode, players). Version 1 files still restore. */
-export const BACKUP_VERSION = 2;
+/** 2: roster-mode games (mode, players). 3: timed penalties (penaltyInfo/penaltyEnd). Older files still restore. */
+export const BACKUP_VERSION = 3;
 
 export interface GameBundle {
   meta: GameMeta;
@@ -26,7 +26,7 @@ export function makeBackup(games: GameBundle[], settings: Settings, now: number)
 
 const EVENT_TYPES = new Set([
   'periodStart', 'periodEnd', 'pause', 'resume', 'unitOn', 'unitOff',
-  'goalFor', 'goalAgainst', 'penaltyFor', 'penaltyAgainst',
+  'goalFor', 'goalAgainst', 'penaltyFor', 'penaltyAgainst', 'penaltyInfo', 'penaltyEnd',
 ]);
 const isNum = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
 

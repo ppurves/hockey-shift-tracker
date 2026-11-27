@@ -39,7 +39,7 @@ describe('timelineSvg', () => {
     expect(count(svg, /class="goal (goalFor|goalAgainst)"/g)).toBe(goals.length);
     const onIce = goals.reduce((a, e) => a + ('onIce' in e ? e.onIce.length : 0), 0);
     expect(count(svg, /class="goal-on-ice/g)).toBe(onIce);
-    expect(count(svg, /class="penalty /g)).toBe(demo.events.filter((e) => e.type.startsWith('penalty')).length);
+    expect(count(svg, /class="penalty /g)).toBe(demo.events.filter((e) => e.type === 'penaltyFor' || e.type === 'penaltyAgainst').length);
     expect(svg).toContain('#0072b2');
     expect(svg).toContain('#d55e00');
   });
@@ -50,5 +50,29 @@ describe('timelineSvg', () => {
     expect(svg).toContain('&lt;Smith &amp; &quot;Jo…');
     expect(svg).not.toContain('<Smith');
     expect(svg.startsWith('<svg')).toBe(true);
+  });
+});
+
+describe('timeline: game conditions and penalty box', () => {
+  it('draws one PP / PK lane (no PP/PK unit rows) and box time in the player row', async () => {
+    const { DEMO_ROSTER, reportView } = await import('.');
+    const demo = generateDemoGame({ id: 'r', startWall: 0, players: DEMO_ROSTER });
+    const view = reportView(demo.meta, demo.events);
+    const { svg } = timelineSvg({ units: view.units, events: view.events, period: 'all', periodLengthMs: 900_000, width: 1400 });
+    expect(svg).toContain('PP / PK');
+    expect(svg).toMatch(/class="cond cond-PP"/);
+    expect(svg).toMatch(/class="cond cond-PK"/);
+    expect(svg).not.toContain('>PP 1<');
+    const boxed = demo.events.filter((e) => e.type === 'penaltyAgainst' && 'playerId' in e && e.playerId);
+    expect(boxed.length).toBeGreaterThan(0);
+    expect(svg).toMatch(/class="box" data-unit="p\d+"/);
+    expect(svg).toContain('In penalty box');
+    expect(svg).toMatch(/class="box-label"[^>]*>#\d+</);
+  });
+
+  it('legend wraps on a narrow timeline', () => {
+    const { svg, height } = timelineSvg({ units: DEFAULT_UNITS, events: demo.events, period: 1, periodLengthMs: 900_000, width: 360 });
+    expect(svg).toContain('Power play');
+    expect(height).toBeGreaterThan(30 + 26 + 5 * 30 + 22 + 2 * 22);
   });
 });

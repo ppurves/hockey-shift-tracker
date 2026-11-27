@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_UNITS as U,
+  LEGACY_UNITS as U,
   GameEngine,
   addMarker,
   addShift,

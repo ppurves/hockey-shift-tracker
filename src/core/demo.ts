@@ -1,7 +1,7 @@
 // Demo game generator: drives the real engine with a fake clock, so the demo
 // log is exactly what live use would produce. Deterministic for a given seed.
 
-import { GameEngine, type Command } from './engine';
+import { boxPenalty, GameEngine, type Command } from './engine';
 import { newGameMeta } from './game';
 import { rosterLines, trackedUnits } from './roster';
 import type { GameEvent, GameMeta, Player, UnitDef } from './types';
@@ -47,10 +47,7 @@ export interface DemoGame {
 /**
  * A realistic 3-period game: rotating forward lines (~35–55 s) and D pairs
  * (~45–70 s), whistles every minute or two (some with line changes while
- * paused), penalties with 2:00 power plays / penalty kills, and goals.
- *
- * Demo convention: "Penalty for" = called for us (on the opponent) → we go on
- * the PP; "Penalty against" = called against us → PK.
+ * paused), 2:00 penalties (power plays / penalty kills), and goals.
  */
 export function generateDemoGame(opts: {
   id: string;
@@ -71,7 +68,8 @@ export function generateDemoGame(opts: {
   const roster = !!opts.players;
   const tracked = trackedUnits(meta);
   const ids = (g: UnitDef['group']) => units.filter((u) => u.group === g).map((u) => u.id);
-  const F = ids('F'), D = ids('D'), PP = ids('PP'), PK = ids('PK');
+  const F = ids('F'), D = ids('D');
+  const goalie = tracked.find((u) => u.group === 'G');
   const extras = (g: 'F' | 'D') => tracked.filter((u) => u.kind === 'player' && u.group === g && !u.lineId);
   const periodMs = 15 * 60_000;
 
@@ -96,25 +94,23 @@ export function generateDemoGame(opts: {
       const out = members[Math.floor(rand() * members.length)];
       const want = new Set([...members.filter((m) => m !== out).map((m) => m.id), extra.id]);
       for (const u of tracked) {
-        if (u.kind === 'player' && u.group === group && !!g.state.active[u.id] !== want.has(u.id)) run({ type: 'tapUnit', unitId: u.id });
+        const wanted = want.has(u.id) && !boxPenalty(g.state, u.id);
+        if (u.kind === 'player' && u.group === group && !!g.state.active[u.id] !== wanted) run({ type: 'tapUnit', unitId: u.id });
       }
     } else {
       run({ type: 'tapLine', lineId: id });
     }
   };
   const tapOn = (id: string | undefined) => {
-    if (roster && id && units.find((u) => u.id === id)?.group !== 'PP' && units.find((u) => u.id === id)?.group !== 'PK') {
-      lineOn(id);
-      return;
-    }
-    if (id && !g.state.active[id]) run({ type: 'tapUnit', unitId: id });
+    if (roster) lineOn(id);
+    else if (id && !g.state.active[id]) run({ type: 'tapUnit', unitId: id });
   };
-  const tapOff = (id: string | undefined) => { if (id && g.state.active[id]) run({ type: 'tapUnit', unitId: id }); };
   const stoppage = (lo = 20, hi = 60) => { wall += between(lo, hi) * 1000; };
 
-  let fi = 0, di = 0, ppi = 0, pki = 0;
+  let fi = 0, di = 0;
   for (let period = 1; period <= 3; period++) {
-    run({ type: 'startPeriod', period });
+    run({ type: 'startPeriod', period }); // from P2 on, the goalie goes back in net by itself
+    if (goalie && period === 1) run({ type: 'tapUnit', unitId: goalie.id });
     wall += period === 1 ? 60_000 : 15 * 60_000; // warm-up / intermission
     tapOn(F[fi % F.length]);
     tapOn(D[di % D.length]);
@@ -123,8 +119,6 @@ export function generateDemoGame(opts: {
     let nextF = between(35, 55) * 1000;
     let nextD = between(45, 70) * 1000;
     let nextWhistle = between(50, 110) * 1000;
-    let specialEnds = 0; // game ms when the current PP/PK ends
-    let special: string | undefined;
     // Scripted incidents for this period, at random times (sorted).
     const script: { kind: Incident; atMs: number }[] = [];
     {
@@ -141,15 +135,11 @@ export function generateDemoGame(opts: {
 
     while (g.gameMs() < periodMs) {
       const t = g.gameMs();
-      const step = Math.min(nextF, nextD, nextWhistle, special ? specialEnds : Infinity, periodMs) - t;
+      const step = Math.min(nextF, nextD, nextWhistle, periodMs) - t;
       wall += Math.max(step, 0);
       const now = g.gameMs();
       if (now >= periodMs) break;
-
-      if (special && now >= specialEnds) {
-        tapOff(special);
-        special = undefined;
-      }
+      g.settle(); // a penalty that ran out ends the PP/PK
       if (now >= nextF) {
         fi++;
         tapOn(F[fi % F.length]);
@@ -161,19 +151,17 @@ export function generateDemoGame(opts: {
         nextD = now + between(45, 70) * 1000;
       }
       if (now >= nextWhistle) {
-        const incident = script[0] && now >= script[0].atMs && (script[0].kind.startsWith('goal') || !special)
+        const incident = script[0] && now >= script[0].atMs && (script[0].kind.startsWith('goal') || !g.state.penalties.length)
           ? script.shift()!.kind : null;
         if (incident === 'goalFor' || incident === 'goalAgainst') {
-          run({ type: incident }); // auto-pauses
-          // A goal by the team with the extra skater ends the power play.
-          if (special && (incident === 'goalFor') === special.startsWith('PP')) { tapOff(special); special = undefined; }
+          run({ type: incident }); // auto-pauses; a power-play goal ends the penalty
           stoppage(40, 80);
           fi++; tapOn(F[fi % F.length]); nextF = now + between(35, 55) * 1000;
         } else if (incident === 'penaltyFor' || incident === 'penaltyAgainst') {
-          run({ type: incident }); // auto-pauses
-          special = incident === 'penaltyFor' ? PP[ppi++ % PP.length] : PK[pki++ % PK.length];
-          tapOn(special);
-          specialEnds = now + 120_000;
+          // Roster: one of our forwards on the ice goes to the box.
+          const onF = tracked.filter((u) => u.kind === 'player' && u.group === 'F' && g.state.active[u.id]);
+          const boxed = roster && incident === 'penaltyAgainst' ? onF[Math.floor(rand() * onF.length)] : undefined;
+          run({ type: incident, lengthMs: 120_000, ...(boxed ? { playerId: boxed.id } : {}) }); // auto-pauses
           stoppage(30, 60);
         } else {
           run({ type: 'pause' });

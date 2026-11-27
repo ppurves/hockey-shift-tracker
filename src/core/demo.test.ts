@@ -46,8 +46,7 @@ describe('toiCheck', () => {
     for (const r of rows) {
       expect(r.sums.F).toBe(r.clockMs);
       expect(r.sums.D).toBe(r.clockMs);
-      expect(r.sums.ST).toBeLessThanOrEqual(r.clockMs);
-      expect(r.sums.ST).toBeGreaterThan(0);
+      expect(r.sums.ST).toBe(0); // PP/PK are game conditions now, not units
     }
   });
 });

@@ -56,10 +56,11 @@ describe('roster basics', () => {
     expect(out.map((p) => p.lineId)).toEqual([null, null, null, 'L2']);
   });
 
-  it('tracks skaters (not goalies) ordered by line then number, plus PP/PK units', () => {
+  it('tracks players ordered by line then number, extras, then goalies', () => {
     const meta = newGameMeta({ opponent: 'x', mode: 'roster', players: roster }, 'g', 0);
     const ids = trackedUnits(meta).map((u) => u.id);
-    expect(ids).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p8', 'p9', 'p7', 'PP1', 'PP2', 'PK1', 'PK2']);
+    expect(ids).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p8', 'p9', 'p7', 'p10']);
+    expect(trackedUnits(meta).at(-1)).toMatchObject({ group: 'G', kind: 'player', lineId: null });
     expect(playerUnits(meta)[0]).toMatchObject({ name: '#9 Avery', group: 'F', kind: 'player', lineId: 'L1' });
   });
 
@@ -71,14 +72,14 @@ describe('roster basics', () => {
 });
 
 describe('roster engine', () => {
-  it('tapLine swaps the whole group, players toggle alone, PP/PK untouched', () => {
+  it('tapLine swaps the whole group, players toggle alone, goalie untouched', () => {
     const { g, run, at } = setup();
     run({ type: 'startPeriod', period: 1 });
     run({ type: 'resume' });
     run({ type: 'tapLine', lineId: 'L1' });
     run({ type: 'tapLine', lineId: 'D1' });
-    run({ type: 'tapUnit', unitId: 'PK1' });
-    expect(Object.keys(g.state.active).sort()).toEqual(['PK1', 'p1', 'p2', 'p3', 'p8', 'p9']);
+    run({ type: 'tapUnit', unitId: 'p10' });
+    expect(Object.keys(g.state.active).sort()).toEqual(['p1', 'p10', 'p2', 'p3', 'p8', 'p9']);
     // Single swap: extra on for #22; several players can be on at once.
     at(20);
     run({ type: 'tapUnit', unitId: 'p3' });
@@ -88,7 +89,7 @@ describe('roster engine', () => {
     // Line change takes off every forward (incl. the extra) and keeps D and PK on.
     at(40);
     const r = run({ type: 'tapLine', lineId: 'L2' });
-    expect(Object.keys(g.state.active).sort()).toEqual(['PK1', 'p4', 'p5', 'p6', 'p8', 'p9']);
+    expect(Object.keys(g.state.active).sort()).toEqual(['p10', 'p4', 'p5', 'p6', 'p8', 'p9']);
     expect(r.events.every((e) => e.txn === r.events[0].txn)).toBe(true);
     expect(g.peekUndo()?.label).toBe('Line 2 on');
     // Tapping a line that is fully on takes it off.
@@ -116,7 +117,7 @@ describe('roster engine', () => {
     expect(row('D1').stats.gf).toBe(1);
     expect(row('p3').stats.gf).toBe(0);
     expect(row('p1')).toMatchObject({ kind: 'player', stats: { gf: 1, plusMinus: 1 } });
-    expect(row('PK1').kind).toBe('unit');
+    expect(row('p10')).toMatchObject({ kind: 'player', stats: { gf: 0 } }); // goalie not in net
   });
 
   it('line TOI = time with a majority of its players on', () => {
@@ -181,9 +182,10 @@ describe('roster engine', () => {
 describe('roster reports', () => {
   const demo = generateDemoGame({ id: 'd', startWall: Date.UTC(2026, 10, 21, 19), players: DEMO_ROSTER });
 
-  it('demo is valid: F players average 3 on the ice, D 2', () => {
+  it('demo is valid: ~3 forwards on the ice (fewer while one is in the box), 2 D', () => {
     for (const c of toiCheck(trackedUnits(demo.meta), demo.events)) {
-      expect(c.sums.F).toBe(3 * c.clockMs);
+      expect(c.sums.F).toBeLessThanOrEqual(3 * c.clockMs);
+      expect(c.sums.F).toBeGreaterThan(2.85 * c.clockMs);
       expect(c.sums.D).toBe(2 * c.clockMs);
     }
   });
@@ -196,7 +198,7 @@ describe('roster reports', () => {
 
   it('report rows: each line then its players, extras, PP/PK', () => {
     const ids = reportView(demo.meta, demo.events).units.map((u) => u.id);
-    expect(ids).toEqual(['L1', 'p1', 'p2', 'p3', 'L2', 'p4', 'p5', 'p6', 'L3', 'p7', 'p8', 'p9', 'D1', 'p11', 'p12', 'D2', 'p13', 'p14', 'p10', 'p15', 'PP1', 'PP2', 'PK1', 'PK2']);
+    expect(ids).toEqual(['L1', 'p1', 'p2', 'p3', 'L2', 'p4', 'p5', 'p6', 'L3', 'p7', 'p8', 'p9', 'D1', 'p11', 'p12', 'D2', 'p13', 'p14', 'p10', 'p15', 'p16', 'p17']);
   });
 
   it('line rows: TOI ≤ clock per period and the extra played', () => {

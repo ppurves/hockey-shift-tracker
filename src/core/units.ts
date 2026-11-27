@@ -1,11 +1,17 @@
 import type { Group, UnitDef } from './types';
 
+/** Lines and pairs. Power plays and penalty kills are game conditions, not units. */
 export const DEFAULT_UNITS: UnitDef[] = [
   { id: 'L1', name: 'Line 1', group: 'F' },
   { id: 'L2', name: 'Line 2', group: 'F' },
   { id: 'L3', name: 'Line 3', group: 'F' },
   { id: 'D1', name: 'D 1', group: 'D' },
   { id: 'D2', name: 'D 2', group: 'D' },
+];
+
+/** Units of games made before M7, which tracked PP/PK as units (kept for old games and tests). */
+export const LEGACY_UNITS: UnitDef[] = [
+  ...DEFAULT_UNITS,
   { id: 'PP1', name: 'PP 1', group: 'PP' },
   { id: 'PP2', name: 'PP 2', group: 'PP' },
   { id: 'PK1', name: 'PK 1', group: 'PK' },
@@ -17,21 +23,26 @@ export const DEFAULT_UNITS: UnitDef[] = [
  * F and D are separate sets; PP and PK share one "special teams" set,
  * so at most one PP-or-PK unit is active at a time.
  */
-export function exclusionSet(group: Group): 'F' | 'D' | 'ST' {
+export function exclusionSet(group: Group): 'F' | 'D' | 'G' | 'ST' {
   return group === 'PP' || group === 'PK' ? 'ST' : group;
 }
+
+/** Legacy special-teams unit (PP/PK group). */
+export const isSpecialTeamsUnit = (u: Pick<UnitDef, 'group'>): boolean => u.group === 'PP' || u.group === 'PK';
 
 /**
  * Exclusion key for a unit: units with the same key can't be on together.
  * Roster players get a key of their own (any number of players can be on).
  */
 export function exclusionKey(u: Pick<UnitDef, 'id' | 'group' | 'kind'>): string {
-  return u.kind === 'player' ? `player:${u.id}` : exclusionSet(u.group);
+  if (u.kind === 'player') return u.group === 'G' ? 'G' : `player:${u.id}`; // one goalie in net
+  return exclusionSet(u.group);
 }
 
 const PREFIX: Record<Group, { id: string; name: string }> = {
   F: { id: 'L', name: 'Line' },
   D: { id: 'D', name: 'D' },
+  G: { id: 'G', name: 'Goalie' },
   PP: { id: 'PP', name: 'PP' },
   PK: { id: 'PK', name: 'PK' },
 };
@@ -47,7 +58,7 @@ export function nextUnit(units: readonly UnitDef[], group: Group): UnitDef {
 
 /** Units sorted by group order F, D, PP, PK (stable within a group). */
 export function sortUnits(units: readonly UnitDef[]): UnitDef[] {
-  const order: Group[] = ['F', 'D', 'PP', 'PK'];
+  const order: Group[] = ['F', 'D', 'G', 'PP', 'PK'];
   return order.flatMap((g) => units.filter((u) => u.group === g));
 }
 
